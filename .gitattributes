@@ -1,0 +1,26 @@
+# Unity writes its text files with LF line endings; keep them that way on every system.
+* text=auto
+*.cs        text diff=csharp
+*.asmdef    text eol=lf
+*.json      text eol=lf
+*.asset     text eol=lf
+*.meta      text eol=lf
+*.unity     text eol=lf
+*.prefab    text eol=lf
+*.mat       text eol=lf
+*.lighting  text eol=lf
+
+# Binary files a map brings in. No Git LFS here on purpose: the kit itself holds none, and a map
+# project that needs it can add it.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.tga       binary
+*.tif       binary
+*.psd       binary
+*.exr       binary
+*.hdr       binary
+*.fbx       binary
+*.FBX       binary
+*.blend     binary
+*.bundle    binary
