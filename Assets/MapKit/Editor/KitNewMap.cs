@@ -17,7 +17,7 @@ namespace Mimicraft.EditorTools
     /// starts from something that validates rather than from an empty scene and a list of rules.
     ///
     /// What it makes: the descriptor, lighting settings the game's shaders are built for (Shadowmask,
-    /// Directional, no realtime GI), a probe volume, spawn markers for Standard and Practice, a baked map
+    /// Directional, no realtime GI), a probe volume, spawn markers for Standard, Practice and Deathmatch, a baked map
     /// bounds box - and, unless asked not to, a small closed example room with a few props and two lamps,
     /// so the first bake and the first walk have something to show. Only the lighting is left to bake,
     /// because that takes minutes and the author should choose when.
@@ -33,6 +33,7 @@ namespace Mimicraft.EditorTools
         string description = "";
         bool standard = true;
         bool practice = true;
+        bool deathmatch = true;
         bool exampleRoom = true;
         string folder = "Assets/Maps";
 
@@ -80,6 +81,7 @@ namespace Mimicraft.EditorTools
                 EditorGUILayout.PrefixLabel(T("Modlar", "Modes"));
                 standard = GUILayout.Toggle(standard, "Standard");
                 practice = GUILayout.Toggle(practice, "Practice");
+                deathmatch = GUILayout.Toggle(deathmatch, "Deathmatch");
             }
             exampleRoom = EditorGUILayout.ToggleLeft(
                 T("Örnek oda ekle (bir oda, bir kapı, birkaç eşya, iki lamba)", "Add an example room (a room, a door, a few props, two lamps)"),
@@ -125,7 +127,7 @@ namespace Mimicraft.EditorTools
                 return T("Yapımcı adı en çok 32 karakter olabilir.", "The author name can be at most 32 characters.");
             if (description.Length > 512)
                 return T("Açıklama en çok 512 karakter olabilir.", "The description can be at most 512 characters.");
-            if (!standard && !practice)
+            if (!standard && !practice && !deathmatch)
                 return T("En az bir mod seç.", "Pick at least one mode.");
             string normalized = folder.Replace('\\', '/').TrimEnd('/');
             if (normalized != "Assets" && !normalized.StartsWith("Assets/", System.StringComparison.Ordinal))
@@ -164,7 +166,8 @@ namespace Mimicraft.EditorTools
                 MapName = mapName.Trim(),
                 Author = author.Trim(),
                 Description = description.Trim(),
-                Modes = (standard ? MapMarkerModes.Standard : 0) | (practice ? MapMarkerModes.Practice : 0),
+                Modes = (standard ? MapMarkerModes.Standard : 0) | (practice ? MapMarkerModes.Practice : 0)
+                    | (deathmatch ? MapMarkerModes.Deathmatch : 0),
                 ExampleRoom = exampleRoom,
                 SceneName = sceneName,
                 ScenePath = scenePath,
@@ -192,7 +195,7 @@ namespace Mimicraft.EditorTools
         public sealed class Options
         {
             public string MapName = "", Author = "", Description = "";
-            public MapMarkerModes Modes = MapMarkerModes.Standard | MapMarkerModes.Practice;
+            public MapMarkerModes Modes = MapMarkerModes.Standard | MapMarkerModes.Practice | MapMarkerModes.Deathmatch;
             public bool ExampleRoom = true;
             public string SceneName = "", ScenePath = "";
         }
@@ -300,10 +303,14 @@ namespace Mimicraft.EditorTools
 
             Transform markers = Child(map.transform, "Markers");
             MapMarkerModes modes = options.Modes;
-            if ((modes & MapMarkerModes.Standard) != 0)
+
+            // Hunter spawns for Standard, and for Deathmatch, which pools every spawn kind: with them the
+            // room has six points for it, the validator's minimum. Practice has no Hunters.
+            MapMarkerModes hunterModes = modes & (MapMarkerModes.Standard | MapMarkerModes.Deathmatch);
+            if (hunterModes != MapMarkerModes.None)
             {
-                Marker(markers, "Hunter Spawn 1", new Vector3(7f, 0f, -4f), 270f, MapMarkerKind.HunterSpawn, MapMarkerModes.Standard);
-                Marker(markers, "Hunter Spawn 2", new Vector3(7f, 0f, 4f), 270f, MapMarkerKind.HunterSpawn, MapMarkerModes.Standard);
+                Marker(markers, "Hunter Spawn 1", new Vector3(7f, 0f, -4f), 270f, MapMarkerKind.HunterSpawn, hunterModes);
+                Marker(markers, "Hunter Spawn 2", new Vector3(7f, 0f, 4f), 270f, MapMarkerKind.HunterSpawn, hunterModes);
             }
             Marker(markers, "Hider Spawn 1", new Vector3(-7f, 0f, -5f), 90f, MapMarkerKind.HiderSpawn | MapMarkerKind.LobbySpawn, modes);
             Marker(markers, "Hider Spawn 2", new Vector3(-7f, 0f, 5f), 90f, MapMarkerKind.HiderSpawn | MapMarkerKind.LobbySpawn, modes);

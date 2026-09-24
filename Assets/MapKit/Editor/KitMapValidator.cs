@@ -71,6 +71,10 @@ namespace Mimicraft.EditorTools
         const float PlayerTop = 1.5f;
         const float GroundSearch = 3f;
 
+        // Below this Deathmatch's farthest-from-everyone spawn has little to choose from. The example room
+        // has six; House, the built-in Deathmatch map, has 28.
+        const int MinDeathmatchSpawns = 6;
+
         public static KitValidation Run(Scene scene)
         {
             var v = new KitValidation { SceneName = scene.name, MapId = KitMapId.SanitizeName(scene.name) };
@@ -217,17 +221,23 @@ namespace Mimicraft.EditorTools
                     Tr($"Yapımcı adı {descriptor.Author.Length} karakter. En çok 32 olabilir."),
                     En($"The author name is {descriptor.Author.Length} characters long. The limit is 32."), target);
 
-            MapMarkerModes modes = descriptor.Modes;
+            MapMarkerModes modes = descriptor.Modes & (MapMarkerModes.Standard | MapMarkerModes.Practice
+                | MapMarkerModes.Deathmatch | MapMarkerModes.Gartic);
             if (modes == MapMarkerModes.None)
                 Add(v, KitIssueLevel.Error, KitArea.MapInfo,
-                    "Harita hiçbir mod için işaretlenmemiş. Descriptor'da en az Standard ya da Practice seç.",
-                    "The map is not marked for any mode. Tick at least Standard or Practice on the descriptor.", target);
+                    "Harita hiçbir mod için işaretlenmemiş. Descriptor'da en az birini seç: Standard, Practice ya da Deathmatch.",
+                    "The map is not marked for any mode. Tick at least one on the descriptor: Standard, Practice or Deathmatch.", target);
 
-            MapMarkerModes unsupported = modes & ~(MapMarkerModes.Standard | MapMarkerModes.Practice);
-            if (unsupported != MapMarkerModes.None)
+            // Gartic has no map choice in the game: it always plays its own map (KitMapCatalog.ModesFor).
+            if ((modes & MapMarkerModes.Gartic) != 0)
                 Add(v, KitIssueLevel.Warning, KitArea.MapInfo,
-                    Tr($"Kit haritaları şimdilik yalnızca Standard ve Practice'te oynanıyor. {unsupported} yok sayılır."),
-                    En($"Kit maps are played in Standard and Practice only, for now. {unsupported} will be ignored."), target);
+                    "Gartic (Guess the Mimic) şimdilik her zaman kendi haritasında oynanıyor; kit haritaları orada sunulmaz.",
+                    "Gartic (Guess the Mimic) always plays its own map for now; kit maps are not offered there.", target);
+
+            if ((modes & MapMarkerModes.Standard) != 0)
+                Add(v, KitIssueLevel.Info, KitArea.MapInfo,
+                    "Standard işaretli harita Companion ve Infestation'da da sunulur: üçü aynı işaretçileri kullanır.",
+                    "A map marked for Standard is offered in Companion and Infestation too: all three read the same markers.", target);
 
             return descriptor;
         }
@@ -509,6 +519,24 @@ namespace Mimicraft.EditorTools
                 Add(v, KitIssueLevel.Error, KitArea.Markers,
                     "Practice için doğma noktası yok. Practice işaretli bir ModelerSpawn, LobbySpawn ya da HiderSpawn ekle.",
                     "No spawn point for Practice. Add a ModelerSpawn, LobbySpawn or HiderSpawn with Practice ticked.");
+
+            // Deathmatch pools every HunterSpawn, HiderSpawn and LobbySpawn marked for it and puts a player
+            // at the one farthest from everybody (DeathmatchRoundManager), so it wants a few, spread out.
+            // Strict here where the game is lenient: the game falls back to every marker on a map that marks
+            // none for Deathmatch, which suits the built-in maps and hides a forgotten box on a kit one.
+            if ((modes & MapMarkerModes.Deathmatch) != 0)
+            {
+                int points = markers.Count(m => m.AppliesTo(MapMarkerModes.Deathmatch)
+                    && (m.Kind & (MapMarkerKind.HunterSpawn | MapMarkerKind.HiderSpawn | MapMarkerKind.LobbySpawn)) != 0);
+                if (points == 0)
+                    Add(v, KitIssueLevel.Error, KitArea.Markers,
+                        "Deathmatch için doğma noktası yok. HunterSpawn, HiderSpawn ya da LobbySpawn işaretçilerinde Deathmatch'i de seç.",
+                        "No spawn point for Deathmatch. Tick Deathmatch on HunterSpawn, HiderSpawn or LobbySpawn markers too.");
+                else if (points < MinDeathmatchSpawns)
+                    Add(v, KitIssueLevel.Warning, KitArea.Markers,
+                        Tr($"Deathmatch için {points} doğma noktası var. Oyun oyuncuyu herkesten en uzak noktaya koyar; {MinDeathmatchSpawns}'dan azıyla oyuncular birbirinin yanında doğar."),
+                        En($"There are {points} spawn points for Deathmatch. The game puts a player at the one farthest from everyone; with fewer than {MinDeathmatchSpawns} players spawn next to each other."));
+            }
 
             var unused = markers.Where(m => m.Modes == MapMarkerModes.None).ToList();
             if (unused.Count > 0)

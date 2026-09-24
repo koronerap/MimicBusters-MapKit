@@ -8,8 +8,9 @@ Kit, oyunun kullandığı harita koduyla gelen bir Unity projesi. Haritayı sır
 kurarsın, ışığını Unity'de bake edersin; kit onu oyunun kurallarıyla denetler, Windows, Linux ve macOS'un
 aynı şekilde açtığı tek bir dosyaya paketler, oyununa kurar ve oyunu o haritada başlatır.
 
-Bu kitle yapılan haritalar **Standard** (Avcılar ve Modelciler) ve **Practice** (serbest yapım, round
-yok) modlarında oynanır.
+Bu kitle yapılan haritalar **Standard** (Avcılar ve Modelciler, aynı işaretçileri kullanan Companion ve
+Infestation dahil), **Practice** (serbest yapım, round yok) ve **Deathmatch** (herkes silahlı, taraf yok)
+modlarında oynanır.
 
 ## Gerekenler
 
@@ -44,8 +45,9 @@ geometriyi **Static** işaretle ki bake edilmiş ışık alsın.
 **Harita bilgisi.** Yeni sahnedeki `Map` objesinde bir **Kit Map Descriptor** var: haritanın oyunda
 görünen adı, açıklaması, yapımcısı ve modları. Tam olarak bir tane olmalı.
 
-**Doğma noktaları.** Doğma noktası, üzerinde **Map Marker** olan boş bir obje. **Modes** alanı hangi
-modların onu kullandığını, **Kinds** alanı ne işe yaradığını söyler:
+**Doğma noktaları.** Doğma noktası, üzerinde **Map Marker** olan boş bir obje. Inspector'ı iki şeyi sırayla
+sorar: **1. Modlar**, hangi modlar kullanır; **2. Türler**, ne için. Altında hangi modun işaretçiyi ne
+olarak kullandığını yazar ve seçili modların hiçbirinin okumadığı bir tür varsa uyarır:
 
 | Tür | Ne için |
 |---|---|
@@ -53,11 +55,14 @@ modların onu kullandığını, **Kinds** alanı ne işe yaradığını söyler:
 | HunterSpawn | Av başlayınca Avcıların çıktığı yer (Standard). Hazırlığı oyunun kendi Avcı odasında geçirirler. |
 | LobbySpawn | Lobi dolarken herkesin beklediği yer. İsteğe bağlı: yoksa lobi HiderSpawn'ları kullanır. |
 | HunterDoor | İsteğe bağlı. Lobide ve hazırlıkta kapalı duran, av başlayınca açılan obje. Yalnızca ilki sayılır. |
+| ModelerSpawn | Practice: oyuncuların belirdiği yer, HiderSpawn ve LobbySpawn gibi. |
+| ArenaSpawn | İsteğe bağlı. 1v1 düello noktası (Standard). Oyunun Avcı odasında kendi noktaları var. |
 
 Standard için en az bir HunterSpawn ve bir HiderSpawn gerekir. Practice için Practice işaretli bir
-HiderSpawn, LobbySpawn ya da ModelerSpawn gerekir. Her birinden birkaç tane koy: dağınık, zeminde,
-yüzü haritaya dönük. İşaretçiden çıkan çizgi oyuncunun bakacağı yönü gösterir. Hiçbir modu seçili
-olmayan işaretçiyi hiçbir mod kullanmaz.
+HiderSpawn, LobbySpawn ya da ModelerSpawn gerekir. Deathmatch, Deathmatch işaretli bütün HunterSpawn,
+HiderSpawn ve LobbySpawn noktalarını kullanır ve oyuncuyu herkesten en uzak olana koyar; en az altı,
+dağınık koy. Her birinden birkaç tane koy: dağınık, zeminde, yüzü haritaya dönük. İşaretçiden çıkan
+çizgi oyuncunun bakacağı yönü gösterir. Hiçbir modu seçili olmayan işaretçiyi hiçbir mod kullanmaz.
 
 **Harita sınırı.** **Map Bounds Volume** bütün oyun alanını saran bir kutu. Bake edilince oyun,
 oyuncuların nerede olabileceğini bilir ve haritadan düşeni geri alır. Kutu, oyuncunun ulaşabildiği her

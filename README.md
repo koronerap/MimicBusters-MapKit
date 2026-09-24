@@ -8,8 +8,9 @@ The kit is a Unity project with the same map code the game uses. You build a map
 scene, bake its lighting in Unity, and the kit checks it against the game's rules, packs it into one file
 that Windows, Linux and macOS all open, installs it in your game and starts the game on it.
 
-Maps made with this kit can be played in **Standard** (Hunters and Modelers) and **Practice** (free
-building, no rounds).
+Maps made with this kit can be played in **Standard** (Hunters and Modelers, and its variants
+Companion and Infestation, which use the same markers), **Practice** (free building, no rounds) and
+**Deathmatch** (everyone armed, no sides).
 
 ## What you need
 
@@ -45,8 +46,9 @@ light.
 **Map info.** The `Map` object in the new scene carries a **Kit Map Descriptor**: the map's name,
 description, author and modes, as the game shows them. There must be exactly one.
 
-**Spawn points.** A spawn point is an empty object with a **Map Marker**. Its **Modes** field says which
-game modes use it, its **Kinds** field what it is for:
+**Spawn points.** A spawn point is an empty object with a **Map Marker**. Its inspector asks two things
+in order: **1. Modes**, which game modes use it, and **2. Kinds**, what it is for. Under them it says
+which mode uses the marker as what, and warns about a kind none of the ticked modes reads:
 
 | Kind | Used for |
 |---|---|
@@ -54,11 +56,14 @@ game modes use it, its **Kinds** field what it is for:
 | HunterSpawn | Where Hunters come out when the hunt begins (Standard). They spend the preparation time in the game's own Hunter room. |
 | LobbySpawn | Where everyone waits while the lobby fills up. Optional: without it the lobby uses the HiderSpawns. |
 | HunterDoor | Optional. An object that stays shut during the lobby and preparation and opens when the hunt begins. Only the first one counts. |
+| ModelerSpawn | Practice: where players appear, like HiderSpawn and LobbySpawn. |
+| ArenaSpawn | Optional. A 1v1 duel position (Standard). The game's Hunter room has its own. |
 
 Standard needs at least one HunterSpawn and one HiderSpawn. Practice needs a HiderSpawn, LobbySpawn or
-ModelerSpawn with Practice ticked. Put a few of each, spread out, on the floor, facing into the map. The
-line drawn from the marker shows which way the player faces. A marker with no mode ticked is used by no
-mode.
+ModelerSpawn with Practice ticked. Deathmatch uses every HunterSpawn, HiderSpawn and LobbySpawn with
+Deathmatch ticked and puts a player at the one farthest from everyone, so give it at least six, spread
+out. Put a few of each, spread out, on the floor, facing into the map. The line drawn from the marker
+shows which way the player faces. A marker with no mode ticked is used by no mode.
 
 **Map bounds.** The **Map Bounds Volume** is a box around the whole play area. When it is baked, the
 game knows where players can be, and brings back anyone who falls out of the map. Make the box cover
