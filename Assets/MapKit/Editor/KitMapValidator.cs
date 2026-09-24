@@ -91,7 +91,6 @@ namespace Mimicraft.EditorTools
             CheckMarkers(v, objects, descriptor);
             CheckBounds(v, objects);
             CheckBudget(v, objects);
-            CheckPackaging(v);
             return v;
         }
 
@@ -689,19 +688,6 @@ namespace Mimicraft.EditorTools
                 bytes += GraphicsFormatUtility.ComputeMipmapSize(Math.Max(1, w >> mip), Math.Max(1, h >> mip), texture.graphicsFormat);
             }
             return bytes * layers;
-        }
-
-        // ------------------------------------------------------------------ packaging
-
-        static void CheckPackaging(KitValidation v)
-        {
-            foreach (var (target, name) in new[] { (BuildTarget.StandaloneWindows64, "Windows"), (BuildTarget.StandaloneLinux64, "Linux"), (BuildTarget.StandaloneOSX, "macOS") })
-            {
-                if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, target))
-                    Add(v, KitIssueLevel.Warning, KitArea.Packaging,
-                        Tr($"{name} Build Support kurulu değil. {name} oyuncuları bu haritayı yükleyemez. Unity Hub > Installs > Add modules."),
-                        En($"{name} Build Support is not installed. {name} players will not be able to load this map. Unity Hub > Installs > Add modules."));
-            }
         }
     }
 }

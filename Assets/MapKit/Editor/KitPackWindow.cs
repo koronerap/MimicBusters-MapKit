@@ -23,8 +23,6 @@ namespace Mimicraft.EditorTools
     /// </summary>
     public sealed class KitPackWindow : EditorWindow
     {
-        const string PlatformPrefix = "MimicBusters.MapKit.Pack.";
-
         KitPack.Result last;
         List<KitGame.Install> installs;
         Vector2 scroll;
@@ -49,8 +47,6 @@ namespace Mimicraft.EditorTools
 
         static string F(string tr, string en, params object[] args) =>
             string.Format(KitEditorLanguage.Culture, KitEditorLanguage.T(tr, en), args);
-
-        static bool PlatformOn(string key) => EditorPrefs.GetBool(PlatformPrefix + key, true);
 
         void OnEnable()
         {
@@ -92,26 +88,8 @@ namespace Mimicraft.EditorTools
                     KitMapValidatorWindow.Open();
             }
 
-            EditorGUILayout.Space(6);
-            EditorGUILayout.LabelField(T("Platformlar", "Platforms"), EditorStyles.boldLabel);
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                foreach (KitPack.Platform platform in KitPack.Platforms)
-                {
-                    bool installed = KitPack.IsInstalled(platform);
-                    using (new EditorGUI.DisabledScope(!installed))
-                    {
-                        bool on = installed && PlatformOn(platform.Key);
-                        string label = installed ? platform.Label : platform.Label + T(" (modül yok)", " (no module)");
-                        bool now = GUILayout.Toggle(on, label, GUILayout.ExpandWidth(false));
-                        if (installed && now != on)
-                            EditorPrefs.SetBool(PlatformPrefix + platform.Key, now);
-                    }
-                    GUILayout.Space(8);
-                }
-            }
-            EditorGUILayout.LabelField(T("Test için bu bilgisayarın platformu her zaman paketlenir. Atölye'ye yüklemek için üçü de gerekir.",
-                "For a test, this computer's platform is always packed. Uploading to the Workshop needs all three."), EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField(T("Tek paket: Windows, Linux ve macOS aynı dosyayı açar.",
+                "One package: Windows, Linux and macOS open the same file."), EditorStyles.wordWrappedMiniLabel);
 
             EditorGUILayout.Space(6);
             DrawGame();
@@ -208,15 +186,6 @@ namespace Mimicraft.EditorTools
                 return;
             }
 
-            var platforms = KitPack.Platforms.Where(p => KitPack.IsInstalled(p) && PlatformOn(p.Key)).Select(p => p.Key).ToList();
-            if (test && !platforms.Contains(KitPack.HostKey))
-                platforms.Add(KitPack.HostKey);
-            if (platforms.Count == 0)
-            {
-                ShowNotification(new GUIContent(T("En az bir platform seç.", "Pick at least one platform.")));
-                return;
-            }
-
             if (test && !KitGame.IsPlayer(KitGame.GamePath))
             {
                 EditorUtility.DisplayDialog("Map Kit", T("Oyun bulunamadı. Önce Oyun bölümünden seç.", "The game was not found. Choose it under Game first."), T("Tamam", "OK"));
@@ -239,7 +208,7 @@ namespace Mimicraft.EditorTools
                 }
             }
 
-            last = KitPack.Pack(scene, platforms, install: true);
+            last = KitPack.Pack(scene, install: true);
             Repaint();
 
             if (!last.Ok || last.Refused || string.IsNullOrEmpty(last.Installed) || !test)
@@ -288,6 +257,6 @@ namespace Mimicraft.EditorTools
         }
 
         static string PlatformLabel(string key) =>
-            KitPack.Platforms.Where(p => p.Key == key).Select(p => p.Label).DefaultIfEmpty(key).First();
+            key == KitMapId.AnyPlatform ? T("Tüm platformlar", "All platforms") : key;
     }
 }

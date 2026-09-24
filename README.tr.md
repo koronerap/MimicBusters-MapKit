@@ -5,8 +5,8 @@
 [English guide](README.md)
 
 Kit, oyunun kullandığı harita koduyla gelen bir Unity projesi. Haritayı sıradan bir Unity sahnesi olarak
-kurarsın, ışığını Unity'de bake edersin; kit onu oyunun kurallarıyla denetler, Windows, Linux ve macOS
-için paketler, oyununa kurar ve oyunu o haritada başlatır.
+kurarsın, ışığını Unity'de bake edersin; kit onu oyunun kurallarıyla denetler, Windows, Linux ve macOS'un
+aynı şekilde açtığı tek bir dosyaya paketler, oyununa kurar ve oyunu o haritada başlatır.
 
 Bu kitle yapılan haritalar **Standard** (Avcılar ve Modelciler) ve **Practice** (serbest yapım, round
 yok) modlarında oynanır.
@@ -14,10 +14,8 @@ yok) modlarında oynanır.
 ## Gerekenler
 
 - **Unity 6000.3.8f1**, tam olarak bu sürüm, Unity Hub'dan. Haritalar Unity asset bundle'ıdır ve oyun
-  yalnızca kendi Unity sürümünün yaptığı bundle'ları okuyabilir.
-- Unity Hub'da sürümün **Add modules** bölümünden: **Linux Build Support (Mono)** ve **Mac Build Support
-  (Mono)**. Windows desteği Windows editörüyle gelir (macOS ve Linux'ta tersi). Modül yoksa kit yine
-  çalışır, yalnızca o platformu atlar.
+  yalnızca kendi Unity sürümünün yaptığı bundle'ları okuyabilir. Ek modül gerekmez: kit, editörle gelenle
+  paketler.
 - Haritaları denemek için Steam'den kurulu **Mimic Busters**.
 
 ## Başlarken
@@ -93,7 +91,7 @@ oyunun kendi koduyla bir kez daha denetler.
   Procedural, Cubemap, 6 Sided ya da Panoramic.
 - **Katmanlar:** Default, Ignore Raycast, MapBlocker (görünmez duvarlar), GarticMapBlocker.
 - **Işık:** yukarıdaki gibi. En çok 64 ışık.
-- **Boyut:** platform başına en çok 256 MB paket, 512 MB doku, bir dokunun uzun kenarında 8192 piksel,
+- **Boyut:** paket en çok 256 MB, 512 MB doku, bir dokunun uzun kenarında 8192 piksel,
   3 milyon üçgen, 6 milyon vertex ve 10.000 renderer.
 - **Ad:** haritanın kimliği sahne adının küçük harflisidir: harf, rakam, `-` ve `_`, en çok 23 karakter.
   Oyunun kendi kullandığı sahne adları (Startup, Menu, Game, HunterRoom ve diğerleri, ayrıca `Map_` ya
@@ -104,7 +102,7 @@ Hata, oyunun haritayı açmayacağı demektir. Uyarılara bakmaya değer ama har
 ## Arkadaşlarla oynamak
 
 Oturumdaki herkeste harita dosyalarının birebir aynısı olmalı: oyun haritayı yüklemeden önce onları
-karşılaştırır. Haritayı üç platform da seçiliyken paketle, sonra kitteki `Builds/Maps/<kimlik>/`
+karşılaştırır. Paket her sistem için aynı; haritayı bir kez paketle, sonra kitteki `Builds/Maps/<kimlik>/`
 klasörünü arkadaşlarına gönder (zip'leyerek). Her biri klasörü, hiç değiştirmeden, oyunun harita
 klasörüne koyar:
 
@@ -114,14 +112,14 @@ klasörüne koyar:
 | macOS | `~/Library/Application Support/DevAdam/MimicBusters/Maps/Local/` |
 | Linux | `~/.config/unity3d/DevAdam/MimicBusters/Maps/Local/` |
 
-Sonuç `...\Maps\Local\<kimlik>\map.json` ve yanında `map.*.bundle` dosyaları gibi görünür. Harita
+Sonuç `...\Maps\Local\<kimlik>\map.json` ve yanında `map.any.bundle` gibi görünür. Harita
 bundan sonra oyunun harita seçicisinde **Topluluk** altında çıkar. Steam Atölyesi desteği sonra, oyunun
 içinden gelecek.
 
 ## Bir şey ters giderse
 
-- **Kit, oyunun haritayı reddedeceğini söylüyor.** Nedenler platformun altında listeli. Tam rapor
-  Console'da ve `Builds/Maps/<kimlik>.report.txt` dosyasında.
+- **Kit, oyunun haritayı reddedeceğini söylüyor.** Nedenler Paketle ve Test Et penceresinde listeli. Tam
+  rapor Console'da ve `Builds/Maps/<kimlik>.report.txt` dosyasında.
 - **Oyun haritanın açılamadığını söylüyor.** Oyunda **Ayarlar > Oynanış > Geliştirici konsolu**nu aç,
   konsolu Esc'nin altındaki tuşla aç ve `kitmaps` yaz: haritalarını ve birinin neden oynanamadığını
   listeler. `kitinspect <kimlik>` haritayı yüklemeden okur.

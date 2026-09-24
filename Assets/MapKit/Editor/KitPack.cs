@@ -14,13 +14,19 @@ using Debug = UnityEngine.Debug;
 namespace Mimicraft.EditorTools
 {
     /// <summary>
-    /// Packing a map: the open scene built as an AssetBundle for Windows, Linux and macOS, each bundle read
-    /// with the game's own pre-scan (KitBundleInspector and KitMapRules, the same code the game runs before
-    /// it lets Unity open a file), the manifest written, the whole folder put in Builds/Maps/&lt;id&gt; and
-    /// installed in the game's local maps folder.
+    /// Packing a map: the open scene built as one AssetBundle that Windows, Linux and macOS all open
+    /// (KitMapId.AnyPlatform, manifest format 2), read with the game's own pre-scan (KitBundleInspector and
+    /// KitMapRules, the same code the game runs before it lets Unity open a file), the manifest written,
+    /// the whole folder put in Builds/Maps/&lt;id&gt; and installed in the game's local maps folder.
+    ///
+    /// One bundle rather than one per platform since 2026-09-24: with the shaders' variants stripped
+    /// (KitShaderStripper) the platforms' bundles were nearly byte for byte the same, a Windows player
+    /// opened the Linux one as its own, and the Workshop sends every file of an item to every subscriber.
+    /// It is built for the platform the editor runs on, whose Build Support always comes with the editor,
+    /// so an author installs no extra module.
     ///
     /// Validation comes first and its errors stop the pack: they are exactly what the game would refuse.
-    /// The pre-scan comes after, on the real files, because the validator only estimates from the scene
+    /// The pre-scan comes after, on the real file, because the validator only estimates from the scene
     /// and a bundle can differ from its scene (a texture's import settings, a shader Unity pulled in).
     ///
     /// A bundle the pre-scan refuses is written to Builds but not installed. The game would refuse it on
@@ -28,26 +34,23 @@ namespace Mimicraft.EditorTools
     /// </summary>
     public static class KitPack
     {
-        public struct Platform
+        /// <summary>The target the bundle is built for: the editor's own platform. Any would do for the
+        /// game; this one never needs a module installed.</summary>
+        static BuildTarget HostTarget
         {
-            public string Key;
-            public BuildTarget Target;
-            public string Label;
+            get
+            {
+                switch (Application.platform)
+                {
+                    case RuntimePlatform.OSXEditor:
+                        return BuildTarget.StandaloneOSX;
+                    case RuntimePlatform.LinuxEditor:
+                        return BuildTarget.StandaloneLinux64;
+                    default:
+                        return BuildTarget.StandaloneWindows64;
+                }
+            }
         }
-
-        public static readonly Platform[] Platforms =
-        {
-            new Platform { Key = "windows", Target = BuildTarget.StandaloneWindows64, Label = "Windows" },
-            new Platform { Key = "linux", Target = BuildTarget.StandaloneLinux64, Label = "Linux" },
-            new Platform { Key = "macos", Target = BuildTarget.StandaloneOSX, Label = "macOS" },
-        };
-
-        /// <summary>Whether Unity can build for a platform here: its Build Support module is installed.</summary>
-        public static bool IsInstalled(Platform platform) =>
-            BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, platform.Target);
-
-        /// <summary>The platform this editor runs on, which is the bundle the game on this computer reads.</summary>
-        public static string HostKey => KitMapId.PlatformKey;
 
         /// <summary>Where packed maps are written, relative to the project.</summary>
         public const string OutputRoot = "Builds/Maps";
@@ -86,10 +89,10 @@ namespace Mimicraft.EditorTools
         static string F(string tr, string en, params object[] args) =>
             string.Format(KitEditorLanguage.Culture, KitEditorLanguage.T(tr, en), args);
 
-        /// <summary>Packs the scene for the platforms named (KitMapId platform keys), and installs it when
-        /// asked and when the game would accept it. The scene must be the active one: the environment the
-        /// map carries is read from the active scene's settings.</summary>
-        public static Result Pack(Scene scene, ICollection<string> platforms, bool install)
+        /// <summary>Packs the scene, and installs it when asked and when the game would accept it. The scene
+        /// must be the active one: the environment the map carries is read from the active scene's
+        /// settings.</summary>
+        public static Result Pack(Scene scene, bool install)
         {
             var result = new Result();
 
@@ -138,66 +141,38 @@ namespace Mimicraft.EditorTools
             if (Directory.Exists(work))
                 Directory.Delete(work, true);
 
-            var listed = new List<KitMapManifest.Bundle>();
-            var files = new List<string>();
-            Platform[] chosen = Platforms.Where(p => platforms.Contains(p.Key)).ToArray();
+            string file;
+            Bundle bundle;
+            uint crc;
             try
             {
-                for (int i = 0; i < chosen.Length; i++)
-                {
-                    Platform platform = chosen[i];
-                    if (!IsInstalled(platform))
-                    {
-                        result.Notes.Add(F("{0} atlandı: Unity Hub'dan {0} Build Support modülünü kur.",
-                            "{0} skipped: install the {0} Build Support module from Unity Hub.", platform.Label));
-                        continue;
-                    }
-
-                    if (EditorUtility.DisplayCancelableProgressBar("Map Kit", F("{0} için paketleniyor...", "Packing for {0}...", platform.Label),
-                            (float)i / chosen.Length))
-                    {
-                        result.Error = T("İptal edildi.", "Cancelled.");
-                        return result;
-                    }
-
-                    string file = Build(scene, platform, work, out Bundle bundle, out uint crc);
-                    if (file == null)
-                    {
-                        // This computer's platform is the one a test needs; without it there is nothing to
-                        // install. Another platform failing leaves a map that still works here.
-                        string failed = F("{0} paketi oluşturulamadı. Ayrıntı Console'da.",
-                            "The {0} package could not be built. The Console has the details.", platform.Label);
-                        if (platform.Key == HostKey)
-                        {
-                            result.Error = failed;
-                            return result;
-                        }
-                        result.Notes.Add(failed + T(" Harita onsuz paketlendi.", " The map was packed without it."));
-                        continue;
-                    }
-
-                    files.Add(file);
-                    result.Bundles.Add(bundle);
-                    listed.Add(new KitMapManifest.Bundle
-                    {
-                        platform = platform.Key,
-                        file = KitMapId.BundleFileName(platform.Key),
-                        sha256 = KitMapManifest.Sha256File(file),
-                        crc = crc,
-                        size = bundle.Size,
-                    });
-                }
+                EditorUtility.DisplayProgressBar("Map Kit", T("Paketleniyor...", "Packing..."), 0.5f);
+                file = Build(scene, work, out bundle, out crc);
             }
             finally
             {
                 EditorUtility.ClearProgressBar();
             }
 
-            if (listed.Count == 0)
+            if (file == null)
             {
-                result.Error = T("Hiçbir platform için paketlenemedi.", "Nothing could be packed for any platform.");
+                result.Error = T("Paket oluşturulamadı. Ayrıntı Console'da.", "The package could not be built. The Console has the details.");
                 return result;
             }
+
+            var files = new List<string> { file };
+            result.Bundles.Add(bundle);
+            var listed = new List<KitMapManifest.Bundle>
+            {
+                new KitMapManifest.Bundle
+                {
+                    platform = KitMapId.AnyPlatform,
+                    file = KitMapId.BundleFileName(KitMapId.AnyPlatform),
+                    sha256 = KitMapManifest.Sha256File(file),
+                    crc = crc,
+                    size = bundle.Size,
+                },
+            };
 
             var manifest = new KitMapManifest
             {
@@ -250,18 +225,17 @@ namespace Mimicraft.EditorTools
             AssetDatabase.SaveAssets();
         }
 
-        /// <summary>One platform's bundle, built and read by the pre-scan. The file, or null when Unity could
-        /// not build it (the reason is in the Console).</summary>
-        static string Build(Scene scene, Platform platform, string work, out Bundle bundle, out uint crc)
+        /// <summary>The bundle, built and read by the pre-scan. The file, or null when Unity could not build it
+        /// (the reason is in the Console).</summary>
+        static string Build(Scene scene, string work, out Bundle bundle, out uint crc)
         {
-            bundle = new Bundle { Platform = platform.Key };
+            bundle = new Bundle { Platform = KitMapId.AnyPlatform };
             crc = 0;
 
-            string folder = Path.Combine(work, platform.Key);
-            Directory.CreateDirectory(folder);
+            Directory.CreateDirectory(work);
             var build = new AssetBundleBuild
             {
-                assetBundleName = KitMapId.BundleFileName(platform.Key),
+                assetBundleName = KitMapId.BundleFileName(KitMapId.AnyPlatform),
                 assetNames = new[] { scene.path },
             };
 
@@ -270,8 +244,8 @@ namespace Mimicraft.EditorTools
             try
             {
                 Building = true;
-                built = BuildPipeline.BuildAssetBundles(folder, new[] { build },
-                    BuildAssetBundleOptions.ChunkBasedCompression | BuildAssetBundleOptions.StrictMode, platform.Target);
+                built = BuildPipeline.BuildAssetBundles(work, new[] { build },
+                    BuildAssetBundleOptions.ChunkBasedCompression | BuildAssetBundleOptions.StrictMode, HostTarget);
             }
             catch (Exception e)
             {
@@ -283,7 +257,7 @@ namespace Mimicraft.EditorTools
                 Building = false;
             }
 
-            string file = Path.Combine(folder, build.assetBundleName);
+            string file = Path.Combine(work, build.assetBundleName);
             if (built == null || !File.Exists(file))
                 return null;
 

@@ -19,7 +19,10 @@ namespace Mimicraft.MapKit
     [Serializable]
     public sealed class KitMapManifest
     {
-        public const int CurrentFormat = 1;
+        /// <summary>1: one bundle per platform. 2: also a bundle for every platform (KitMapId.AnyPlatform),
+        /// which is what the kit writes since 2026-09-24. The game reads both.</summary>
+        public const int CurrentFormat = 2;
+        public const int MinFormat = 1;
         public const int CurrentKitVersion = 1;
         public const int MinKitVersion = 1;
         public const int MaxBytes = 16 * 1024;
@@ -53,6 +56,10 @@ namespace Mimicraft.MapKit
             }
             return null;
         }
+
+        /// <summary>The bundle a player on this platform opens: one built for it, if the map has one,
+        /// otherwise the one for every platform. Null when there is neither.</summary>
+        public Bundle BundleToLoad(string platform) => BundleFor(platform) ?? BundleFor(KitMapId.AnyPlatform);
 
         /// <summary>Reads and checks a folder's map.json. On success <paramref name="sha256"/> is the hex
         /// SHA-256 of the manifest's bytes - the map's identity.</summary>
@@ -104,7 +111,7 @@ namespace Mimicraft.MapKit
 
         bool Validate(out string why)
         {
-            if (formatVersion != CurrentFormat)
+            if (formatVersion < MinFormat || formatVersion > CurrentFormat)
                 return Fail("unknown manifest format " + formatVersion, out why);
             if (kitVersion < MinKitVersion)
                 return Fail($"made with kit {kitVersion}; this game reads {MinKitVersion}-{CurrentKitVersion}, the author has to re-pack it", out why);
@@ -113,13 +120,16 @@ namespace Mimicraft.MapKit
             if (!Bounded(name, 1, 64) || !Bounded(description, 0, 512) || !Bounded(author, 0, 32)
                 || !Bounded(sceneName, 1, 128) || !Bounded(unityVersion, 0, 32))
                 return Fail("a text field is empty or too long", out why);
-            if (bundles == null || bundles.Length < 1 || bundles.Length > 3)
-                return Fail("must list one to three bundles", out why);
+            // Format 2 adds the bundle for every platform, so four: it and the three platforms' own.
+            int most = formatVersion >= 2 ? 4 : 3;
+            if (bundles == null || bundles.Length < 1 || bundles.Length > most)
+                return Fail($"must list one to {most} bundles", out why);
 
             for (int i = 0; i < bundles.Length; i++)
             {
                 Bundle bundle = bundles[i];
-                if (bundle == null || !KitMapId.IsKnownPlatform(bundle.platform))
+                bool any = formatVersion >= 2 && bundle != null && bundle.platform == KitMapId.AnyPlatform;
+                if (bundle == null || !(any || KitMapId.IsKnownPlatform(bundle.platform)))
                     return Fail("unknown platform in bundle list", out why);
                 if (bundle.file != KitMapId.BundleFileName(bundle.platform))
                     return Fail("bundle file for " + bundle.platform + " must be " + KitMapId.BundleFileName(bundle.platform), out why);

@@ -5,8 +5,8 @@ Make your own maps for **Mimic Busters** in Unity, then walk them in the game wi
 [Türkçe rehber](README.tr.md)
 
 The kit is a Unity project with the same map code the game uses. You build a map as an ordinary Unity
-scene, bake its lighting in Unity, and the kit checks it against the game's rules, packs it for Windows,
-Linux and macOS, installs it in your game and starts the game on it.
+scene, bake its lighting in Unity, and the kit checks it against the game's rules, packs it into one file
+that Windows, Linux and macOS all open, installs it in your game and starts the game on it.
 
 Maps made with this kit can be played in **Standard** (Hunters and Modelers) and **Practice** (free
 building, no rounds).
@@ -14,10 +14,8 @@ building, no rounds).
 ## What you need
 
 - **Unity 6000.3.8f1**, exactly this version, from Unity Hub. Maps are Unity asset bundles, and the game
-  can only read bundles made by its own Unity version.
-- In Unity Hub, under the version's **Add modules**: **Linux Build Support (Mono)** and **Mac Build
-  Support (Mono)**. Windows support comes with the Windows editor (and the other way round on macOS and
-  Linux). Without a module the kit still works, it just skips that platform.
+  can only read bundles made by its own Unity version. No extra modules: the kit packs with what comes with
+  the editor.
 - **Mimic Busters**, installed through Steam, to test your maps.
 
 ## Getting started
@@ -94,7 +92,7 @@ game's own code.
   Cubemap, 6 Sided or Panoramic.
 - **Layers:** Default, Ignore Raycast, MapBlocker (invisible walls), GarticMapBlocker.
 - **Lighting:** as above. At most 64 lights.
-- **Size:** at most 256 MB per platform package, 512 MB of textures, 8192 pixels on a texture's longest
+- **Size:** at most 256 MB for the package, 512 MB of textures, 8192 pixels on a texture's longest
   side, 3 million triangles, 6 million vertices and 10,000 renderers.
 - **Name:** the map's id is its scene name in lower case: letters, digits, `-` and `_`, up to 23
   characters. Scene names the game uses itself (Startup, Menu, Game, HunterRoom and others, and anything
@@ -105,7 +103,7 @@ Errors mean the game will not open the map. Warnings are worth a look but do not
 ## Playing with friends
 
 Everyone in the session needs exactly the same map files: the game compares them before it loads the map.
-Pack the map with all three platforms ticked, then send your friends the folder from
+The package is the same for every system, so pack the map once and send your friends the folder from
 `Builds/Maps/<id>/` in the kit (zip it). Each of them puts the folder, unchanged, into their game's maps
 folder:
 
@@ -115,14 +113,14 @@ folder:
 | macOS | `~/Library/Application Support/DevAdam/MimicBusters/Maps/Local/` |
 | Linux | `~/.config/unity3d/DevAdam/MimicBusters/Maps/Local/` |
 
-The result looks like `...\Maps\Local\<id>\map.json` with the `map.*.bundle` files next to it. The map
+The result looks like `...\Maps\Local\<id>\map.json` with `map.any.bundle` next to it. The map
 then appears in the game's map picker under **Community**. Steam Workshop support will come later, from
 inside the game.
 
 ## When something goes wrong
 
-- **The kit says the game would refuse the map.** The reasons are listed under the platform. The Console
-  has the full report, and so does `Builds/Maps/<id>.report.txt`.
+- **The kit says the game would refuse the map.** The reasons are listed in the Pack and Test window. The
+  Console has the full report, and so does `Builds/Maps/<id>.report.txt`.
 - **The game says the map could not be opened.** Turn on **Settings > Gameplay > Developer console** in
   the game, open the console with the key under Esc, and type `kitmaps`: it lists your maps and why one
   cannot be played. `kitinspect <id>` reads a map without loading it.

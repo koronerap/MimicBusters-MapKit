@@ -111,6 +111,16 @@ namespace Mimicraft.MapKit
 
         public static bool IsKnownPlatform(string key) => key == "windows" || key == "linux" || key == "macos";
 
+        /// <summary>The key of a bundle every platform opens (manifest format 2).
+        ///
+        /// A kit map's bundles differ between platforms by little more than their compiled shaders, and a
+        /// kit map's shaders are never drawn with: the game swaps each for its own before the first frame,
+        /// and the kit strips their variants. Measured 2026-09-24: a Windows player opened a bundle built
+        /// for Linux as it opens its own, the same scene, colliders, markers and lightmaps. One file for
+        /// every platform is a third of the Workshop download, which sends every file of an item to every
+        /// subscriber.</summary>
+        public const string AnyPlatform = "any";
+
         /// <summary>The one file name a platform's bundle may have. The manifest names its files, but a
         /// manifest is not trusted to choose them - it can only repeat these.</summary>
         public static string BundleFileName(string platformKey) => "map." + platformKey + ".bundle";
