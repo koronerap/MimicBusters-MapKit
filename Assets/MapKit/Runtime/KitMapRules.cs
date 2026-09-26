@@ -36,6 +36,10 @@ namespace Mimicraft.MapKit
         public const long MaxTextureSide = 8192;
         public const long MaxVertices = 6_000_000;
 
+        // Sound (plan §16.5): what a map's clips may hold in memory together, and the longest one.
+        public const long MaxAudioBytes = 32L << 20;
+        public const double MaxAudioSeconds = 120d;
+
         static readonly HashSet<int> classes = new HashSet<int>
         {
             1,          // GameObject
@@ -51,6 +55,7 @@ namespace Mimicraft.MapKit
             49,         // TextAsset (APV cell data)
             64,         // MeshCollider
             65,         // BoxCollider
+            83,         // AudioClip (map logic's sounds, plan §16.5; the data's header is checked)
             89,         // Cubemap
             104,        // RenderSettings
             108,        // Light
@@ -88,6 +93,20 @@ namespace Mimicraft.MapKit
             Kit + "|Mimicraft.Gameplay.PenetrableSurface",
             Kit + "|Mimicraft.Gameplay.ProbeVolumeRegion",
             Kit + "|Mimicraft.MapKit.KitMapDescriptor",
+
+            // Map logic (plan §16): data the game's MapLogic reads, never code that runs.
+            Kit + "|Mimicraft.MapKit.MapButton",
+            Kit + "|Mimicraft.MapKit.MapRelay",
+            Kit + "|Mimicraft.MapKit.MapTimer",
+            Kit + "|Mimicraft.MapKit.MapCounter",
+            Kit + "|Mimicraft.MapKit.MapToggle",
+            Kit + "|Mimicraft.MapKit.MapRoundEvents",
+            Kit + "|Mimicraft.MapKit.MapMover",
+            Kit + "|Mimicraft.MapKit.MapTrigger",
+            Kit + "|Mimicraft.MapKit.MapHurtZone",
+            Kit + "|Mimicraft.MapKit.MapSound",
+            Kit + "|Mimicraft.MapKit.MapEffect",
+            Kit + "|Mimicraft.MapKit.MapTeleport",
 
             Urp + "|UnityEngine.Rendering.Universal.UniversalAdditionalLightData",
 
@@ -261,6 +280,12 @@ namespace Mimicraft.MapKit
                 errors.Add("lightmaps are baked non-directional; maps bake Directional");
             if (inventory.RealtimeGI)
                 errors.Add("realtime global illumination is on; maps use baked lightmaps and APV");
+
+            errors.AddRange(inventory.AudioProblems);
+            if (inventory.AudioBytes > MaxAudioBytes)
+                errors.Add($"sounds take {inventory.AudioBytes >> 20} MB, the limit is {MaxAudioBytes >> 20} MB");
+            if (inventory.LongestAudioSeconds > MaxAudioSeconds)
+                errors.Add($"a sound is {inventory.LongestAudioSeconds:0} seconds long, the limit is {MaxAudioSeconds:0}");
 
             inventory.ClassCounts.TryGetValue(23, out int renderers);
             if (renderers > MaxRenderers)

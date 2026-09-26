@@ -17,7 +17,7 @@ namespace Mimicraft.EditorTools
     /// starts from something that validates rather than from an empty scene and a list of rules.
     ///
     /// What it makes: the descriptor, lighting settings the game's shaders are built for (Shadowmask,
-    /// Directional, no realtime GI), a probe volume, spawn markers for Standard, Practice and Deathmatch, a baked map
+    /// Directional, no realtime GI), a probe volume, spawn markers for Standard, Practice, Deathmatch and Gartic, a baked map
     /// bounds box - and, unless asked not to, a small closed example room with a few props and two lamps,
     /// so the first bake and the first walk have something to show. Only the lighting is left to bake,
     /// because that takes minutes and the author should choose when.
@@ -34,7 +34,9 @@ namespace Mimicraft.EditorTools
         bool standard = true;
         bool practice = true;
         bool deathmatch = true;
+        bool gartic = true;
         bool exampleRoom = true;
+        bool logicExample = true;
         string folder = "Assets/Maps";
 
         // Empty while the scene name follows the map name. A name in another alphabet leaves nothing to
@@ -49,7 +51,7 @@ namespace Mimicraft.EditorTools
         public static void Open()
         {
             var window = GetWindow<KitNewMapWindow>(true, "Map Kit", true);
-            window.minSize = new Vector2(420, 360);
+            window.minSize = new Vector2(470, 360);
         }
 
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
@@ -82,10 +84,18 @@ namespace Mimicraft.EditorTools
                 standard = GUILayout.Toggle(standard, "Standard");
                 practice = GUILayout.Toggle(practice, "Practice");
                 deathmatch = GUILayout.Toggle(deathmatch, "Deathmatch");
+                gartic = GUILayout.Toggle(gartic, "Gartic");
             }
             exampleRoom = EditorGUILayout.ToggleLeft(
                 T("Örnek oda ekle (bir oda, bir kapı, birkaç eşya, iki lamba)", "Add an example room (a room, a door, a few props, two lamps)"),
                 exampleRoom);
+            using (new EditorGUI.DisabledScope(!exampleRoom))
+            {
+                logicExample = EditorGUILayout.ToggleLeft(
+                    T("Odaya harita mantığı örneği ekle (düğmeyle çağrılıp kendiliğinden inen sesli bir asansör, düğmeyle yanan bir ısıtıcı)",
+                        "Add a map logic example to the room (a lift with a motor sound, called with a button, that comes back down by itself; a heater switched on with a button)"),
+                    logicExample);
+            }
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -167,8 +177,9 @@ namespace Mimicraft.EditorTools
                 Author = author.Trim(),
                 Description = description.Trim(),
                 Modes = (standard ? MapMarkerModes.Standard : 0) | (practice ? MapMarkerModes.Practice : 0)
-                    | (deathmatch ? MapMarkerModes.Deathmatch : 0),
+                    | (deathmatch ? MapMarkerModes.Deathmatch : 0) | (gartic ? MapMarkerModes.Gartic : 0),
                 ExampleRoom = exampleRoom,
+                LogicExample = exampleRoom && logicExample,
                 SceneName = sceneName,
                 ScenePath = scenePath,
             };
@@ -195,8 +206,10 @@ namespace Mimicraft.EditorTools
         public sealed class Options
         {
             public string MapName = "", Author = "", Description = "";
-            public MapMarkerModes Modes = MapMarkerModes.Standard | MapMarkerModes.Practice | MapMarkerModes.Deathmatch;
+            public MapMarkerModes Modes = MapMarkerModes.Standard | MapMarkerModes.Practice | MapMarkerModes.Deathmatch
+                | MapMarkerModes.Gartic;
             public bool ExampleRoom = true;
+            public bool LogicExample;
             public string SceneName = "", ScenePath = "";
         }
 
@@ -295,11 +308,18 @@ namespace Mimicraft.EditorTools
                 ["Prop"] = MaterialAsset(mapFolder, lit, "Prop", new Color(0.55f, 0.38f, 0.24f)),
                 ["Accent"] = MaterialAsset(mapFolder, lit, "Accent", new Color(0.24f, 0.42f, 0.62f)),
             };
+            if (options.LogicExample)
+            {
+                materials["Button"] = MaterialAsset(mapFolder, lit, "Button", new Color(0.8f, 0.2f, 0.15f));
+                materials["Heater"] = MaterialAsset(mapFolder, lit, "Heater", new Color(0.3f, 0.3f, 0.32f));
+            }
 
             Transform geometry = Child(map.transform, "Geometry");
             Block(geometry, "Floor", new Vector3(0f, -0.1f, 0f), new Vector3(20f, 0.2f, 16f), materials["Floor"]);
             if (options.ExampleRoom)
                 ExampleRoom(geometry, lighting, materials);
+            if (options.LogicExample)
+                LogicExample(map.transform, materials, mapFolder);
 
             Transform markers = Child(map.transform, "Markers");
             MapMarkerModes modes = options.Modes;
@@ -316,6 +336,11 @@ namespace Mimicraft.EditorTools
             Marker(markers, "Hider Spawn 2", new Vector3(-7f, 0f, 5f), 90f, MapMarkerKind.HiderSpawn | MapMarkerKind.LobbySpawn, modes);
             Marker(markers, "Hider Spawn 3", new Vector3(-3f, 0f, -5f), 90f, MapMarkerKind.HiderSpawn | MapMarkerKind.LobbySpawn, modes);
             Marker(markers, "Hider Spawn 4", new Vector3(-3f, 0f, 5f), 90f, MapMarkerKind.HiderSpawn | MapMarkerKind.LobbySpawn, modes);
+
+            // Gartic's stand: the player whose turn it is models here, among the four points the others wait
+            // on. Gartic alone: Practice reads ModelerSpawn first too, and would put everybody on this one.
+            if ((modes & MapMarkerModes.Gartic) != 0)
+                Marker(markers, "Modeler Spawn", new Vector3(-5f, 0f, 0f), 90f, MapMarkerKind.ModelerSpawn, MapMarkerModes.Gartic);
 
             var bounds = new GameObject("Map Bounds").AddComponent<MapBoundsVolume>();
             bounds.transform.SetParent(map.transform, false);
@@ -396,7 +421,111 @@ namespace Mimicraft.EditorTools
             reflections.size = new Vector3(20f, height + 0.4f, 16f);
         }
 
-        static Transform Child(Transform parent, string name)
+        /// <summary>Map logic at its smallest (plan §16), in two corners of the room. Everything in the
+        /// inspector, nothing written in code, which is the point of showing it.
+        ///
+        /// East: a lift and a button on the wall beside it. The button's Pressed sends the lift Forward; the
+        /// lift climbs 1.8 m and, four seconds after it arrives, comes back down by itself (Return After).
+        /// Each journey's Started plays a motor's hum from the lift (a MapSound on a child, so it rides along).
+        ///
+        /// West: a heater plate on the floor and a button beside it that switches it on and off. On, it burns
+        /// (a fire effect) and hurts whoever stands on it (a hurt zone); both start off, and one press
+        /// toggles both.
+        ///
+        /// The lift is not Static, unlike the rest of the room: it moves, and the probes light it.</summary>
+        static void LogicExample(Transform map, Dictionary<string, Material> materials, string mapFolder)
+        {
+            Transform logic = Child(map, "Logic");
+
+            // Flush against the north wall (inner face at z 7.85): a gap narrower than a player there would be a
+            // pocket the bounds bake reports. Clear of Hunter Spawn 2 at (7, 0, 4).
+            GameObject lift = Block(logic, "Lift", new Vector3(7f, 0.1f, 6.85f), new Vector3(2f, 0.2f, 2f), materials["Accent"]);
+            GameObjectUtility.SetStaticEditorFlags(lift, 0);
+            var mover = lift.AddComponent<MapMover>();
+            var moverData = new SerializedObject(mover);
+            SerializedProperty stops = moverData.FindProperty("stops");
+            stops.arraySize = 1;
+            stops.GetArrayElementAtIndex(0).FindPropertyRelative("position").vector3Value = new Vector3(0f, 1.8f, 0f);
+            stops.GetArrayElementAtIndex(0).FindPropertyRelative("rotation").vector3Value = Vector3.zero;
+            stops.GetArrayElementAtIndex(0).FindPropertyRelative("wait").floatValue = 0f;
+            moverData.FindProperty("speed").floatValue = 1.2f;
+            moverData.FindProperty("returnAfter").floatValue = 4f;
+            moverData.ApplyModifiedPropertiesWithoutUndo();
+
+            var motorObject = new GameObject("Lift Motor");
+            motorObject.transform.SetParent(lift.transform, false);
+            var motor = motorObject.AddComponent<MapSound>();
+            var motorData = new SerializedObject(motor);
+            motorData.FindProperty("clip").objectReferenceValue = KitSoundSynth.Save(mapFolder + "/Sounds", "Lift Motor", KitSoundSynth.MotorHum());
+            motorData.FindProperty("volume").floatValue = 0.7f;
+            motorData.FindProperty("maxDistance").floatValue = 18f;
+            motorData.ApplyModifiedPropertiesWithoutUndo();
+            Output(mover, MapEvent.Started, motor, MapInput.Play);
+
+            // On the east wall's inner face (x 9.85), beside the lift.
+            GameObject liftButtonObject = Block(logic, "Lift Button", new Vector3(9.8f, 1.2f, 6.2f), new Vector3(0.1f, 0.3f, 0.3f), materials["Button"]);
+            var liftButton = liftButtonObject.AddComponent<MapButton>();
+            var liftButtonData = new SerializedObject(liftButton);
+            liftButtonData.FindProperty("prompt").intValue = (int)MapButtonPrompt.Call;
+            liftButtonData.ApplyModifiedPropertiesWithoutUndo();
+            Output(liftButton, MapEvent.Pressed, mover, MapInput.Forward);
+
+            // Flush against the west wall (inner face at x -9.85), well clear of the Hider spawns and Gartic's
+            // stand. Low enough to step onto; the zone is the height of a player standing on it.
+            Block(logic, "Heater Plate", new Vector3(-9.1f, 0.05f, 1.5f), new Vector3(1.5f, 0.1f, 1.5f), materials["Heater"]);
+
+            var zoneObject = new GameObject("Heater Zone");
+            zoneObject.transform.SetParent(logic, false);
+            zoneObject.transform.localPosition = new Vector3(-9.1f, 0.1f, 1.5f);
+            var zone = zoneObject.AddComponent<MapHurtZone>();
+            var zoneData = new SerializedObject(zone);
+            zoneData.FindProperty("startEnabled").boolValue = false;
+            zoneData.FindProperty("center").vector3Value = new Vector3(0f, 0.9f, 0f);
+            zoneData.FindProperty("size").vector3Value = new Vector3(1.5f, 1.8f, 1.5f);
+            zoneData.FindProperty("damage").intValue = 10;
+            zoneData.FindProperty("interval").floatValue = 1f;
+            zoneData.ApplyModifiedPropertiesWithoutUndo();
+
+            var fireObject = new GameObject("Heater Fire");
+            fireObject.transform.SetParent(logic, false);
+            fireObject.transform.localPosition = new Vector3(-9.1f, 0.1f, 1.5f);
+            var fire = fireObject.AddComponent<MapEffect>();
+            var fireData = new SerializedObject(fire);
+            fireData.FindProperty("startEnabled").boolValue = false;
+            fireData.FindProperty("preset").intValue = (int)MapEffectPreset.Fire;
+            fireData.FindProperty("size").floatValue = 1.2f;
+            fireData.ApplyModifiedPropertiesWithoutUndo();
+
+            GameObject heaterButtonObject = Block(logic, "Heater Button", new Vector3(-9.8f, 1.2f, 3.2f), new Vector3(0.1f, 0.3f, 0.3f), materials["Button"]);
+            var heaterButton = heaterButtonObject.AddComponent<MapButton>();
+            var heaterButtonData = new SerializedObject(heaterButton);
+            heaterButtonData.FindProperty("prompt").intValue = (int)MapButtonPrompt.Use;
+            heaterButtonData.ApplyModifiedPropertiesWithoutUndo();
+            Output(heaterButton, MapEvent.Pressed, zone, MapInput.Toggle);
+            Output(heaterButton, MapEvent.Pressed, fire, MapInput.Toggle);
+        }
+
+        /// <summary>One more output on an entity: on this event, that input of that target.</summary>
+        internal static void Output(MapEntity from, MapEvent onEvent, MapEntity to, MapInput input, float delay = 0f,
+            float parameter = 0f, bool once = false)
+        {
+            var data = new SerializedObject(from);
+            SerializedProperty outputs = data.FindProperty("outputs");
+            int index = outputs.arraySize;
+            outputs.arraySize = index + 1;
+
+            // A new element starts as a copy of the one before it: every field is set.
+            SerializedProperty output = outputs.GetArrayElementAtIndex(index);
+            output.FindPropertyRelative("onEvent").intValue = (int)onEvent;
+            output.FindPropertyRelative("target").objectReferenceValue = to;
+            output.FindPropertyRelative("input").intValue = (int)input;
+            output.FindPropertyRelative("delay").floatValue = delay;
+            output.FindPropertyRelative("parameter").floatValue = parameter;
+            output.FindPropertyRelative("once").boolValue = once;
+            data.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        internal static Transform Child(Transform parent, string name)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
@@ -415,11 +544,11 @@ namespace Mimicraft.EditorTools
             return go;
         }
 
-        static void MakeStatic(GameObject go) => GameObjectUtility.SetStaticEditorFlags(go,
+        internal static void MakeStatic(GameObject go) => GameObjectUtility.SetStaticEditorFlags(go,
             StaticEditorFlags.ContributeGI | StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic
             | StaticEditorFlags.OccludeeStatic | StaticEditorFlags.ReflectionProbeStatic);
 
-        static Light Lamp(Transform parent, string name, LightType type, Vector3 position, Vector3 euler, Color color,
+        internal static Light Lamp(Transform parent, string name, LightType type, Vector3 position, Vector3 euler, Color color,
             float intensity, float range, LightShadows shadows)
         {
             var go = new GameObject(name);
@@ -437,7 +566,7 @@ namespace Mimicraft.EditorTools
             return light;
         }
 
-        static void Marker(Transform parent, string name, Vector3 position, float yaw, MapMarkerKind kinds, MapMarkerModes modes)
+        internal static void Marker(Transform parent, string name, Vector3 position, float yaw, MapMarkerKind kinds, MapMarkerModes modes)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
@@ -449,7 +578,7 @@ namespace Mimicraft.EditorTools
             marker.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        static Material MaterialAsset(string mapFolder, Shader shader, string name, Color color)
+        internal static Material MaterialAsset(string mapFolder, Shader shader, string name, Color color)
         {
             var material = new Material(shader) { name = name };
             material.SetColor("_BaseColor", color);

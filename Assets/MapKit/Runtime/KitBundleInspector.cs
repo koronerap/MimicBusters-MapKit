@@ -80,6 +80,14 @@ namespace Mimicraft.MapKit
         public int LightmapsMode = -1;
         public bool RealtimeGI;
 
+        /// <summary>Sound clips (plan §16.5): how many, what they can hold in memory at most (a clip that
+        /// decompresses on load counts as the PCM it unpacks to), the longest, and whatever about one is
+        /// refused: codec, channels, rate, or data that is not the FSB5 FMOD expects.</summary>
+        public int AudioClipCount;
+        public long AudioBytes;
+        public double LongestAudioSeconds;
+        public readonly List<string> AudioProblems = new List<string>();
+
         public int MeshCount;
         public long MeshVertices;
         public long MeshTriangles;
@@ -184,7 +192,7 @@ namespace Mimicraft.MapKit
 
                 var walker = new Walker();
                 foreach (SerializedFile file in files.Values)
-                    Survey(file, files, walker, policy, inventory);
+                    Survey(file, files, walker, policy, inventory, archive);
                 inventory.NodeVisits = walker.Visits;
             }
             catch (KitBundleRejected)
@@ -205,7 +213,7 @@ namespace Mimicraft.MapKit
         // ------------------------------------------------------------------ survey
 
         static void Survey(SerializedFile file, Dictionary<string, SerializedFile> files, Walker walker,
-            IKitBundlePolicy policy, KitBundleInventory inventory)
+            IKitBundlePolicy policy, KitBundleInventory inventory, Archive archive)
         {
             var refusedSamples = new Dictionary<string, int>();
 
@@ -266,6 +274,9 @@ namespace Mimicraft.MapKit
                         break;
                     case 157:
                         ReadLightmapSettings(file, obj, walker, inventory);
+                        break;
+                    case 83:
+                        ReadAudioClip(file, obj, walker, inventory, archive);
                         break;
                 }
             }
@@ -441,6 +452,94 @@ namespace Mimicraft.MapKit
             inventory.RealtimeGI |= request.Long("m_GISettings.m_EnableRealtimeLightmaps") != 0;
         }
 
+        /// <summary>A sound clip's settings, and the header of its data: FMOD decodes the data, and like the
+        /// PNG decoder behind a card picture it is not something to hand arbitrary bytes. Only the codecs
+        /// Unity writes pass, one sound per clip, with sizes that stay inside the clip's own data.</summary>
+        static void ReadAudioClip(SerializedFile file, ObjectInfo obj, Walker walker, KitBundleInventory inventory, Archive archive)
+        {
+            var request = new FieldRequest("m_Name", "m_LoadType", "m_Channels", "m_Frequency", "m_Length",
+                "m_IsTrackerFormat", "m_CompressionFormat", "m_Resource.m_Source", "m_Resource.m_Offset", "m_Resource.m_Size");
+            walker.Read(file, obj, request);
+
+            string name = "'" + request.String("m_Name") + "'";
+            long channels = request.Long("m_Channels");
+            long frequency = request.Long("m_Frequency");
+            double seconds = request.Double("m_Length");
+            long size = request.Long("m_Resource.m_Size");
+            if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds < 0d)
+                seconds = double.MaxValue;
+
+            inventory.AudioClipCount++;
+            inventory.LongestAudioSeconds = Math.Max(inventory.LongestAudioSeconds, seconds);
+
+            // Decompress On Load keeps 16-bit PCM of the whole clip; the other load types keep what is stored.
+            double pcm = Math.Min(seconds * Math.Max(0, Math.Min(frequency, 192000)) * Math.Max(0, Math.Min(channels, 8)) * 2d, 1e12);
+            long resident = request.Long("m_LoadType") == 0 ? Math.Max(size, (long)pcm) : size;
+            inventory.AudioBytes += Math.Max(0, resident);
+
+            if (channels < 1 || channels > 2)
+                inventory.AudioProblems.Add($"sound {name} has {channels} channels; maps use mono or stereo");
+            if (frequency < 1 || frequency > 48000)
+                inventory.AudioProblems.Add($"sound {name} is at {frequency} Hz; the limit is 48000");
+            if (request.Long("m_IsTrackerFormat") != 0)
+                inventory.AudioProblems.Add($"sound {name} is a tracker module; maps use ordinary clips");
+            long compression = request.Long("m_CompressionFormat");
+            if (compression < 0 || compression > 2)
+                inventory.AudioProblems.Add($"sound {name} is compressed as format {compression}; maps use PCM, Vorbis or ADPCM");
+
+            string header = CheckFsb5(archive, request.String("m_Resource.m_Source"), request.Long("m_Resource.m_Offset"), size);
+            if (header != null)
+                inventory.AudioProblems.Add($"sound {name}: {header}");
+        }
+
+        /// <summary>Why a clip's data is not a plain FSB5 sound, or null when it is one.</summary>
+        static string CheckFsb5(Archive archive, string source, long offset, long size)
+        {
+            if (size <= 0)
+                return "no audio data";
+
+            // "archive:/CAB-.../CAB-....resource": the node is the last part of the path.
+            string fileName = source ?? "";
+            int slash = fileName.LastIndexOf('/');
+            if (slash >= 0)
+                fileName = fileName.Substring(slash + 1);
+
+            Node node = archive.Nodes.Find(n => n.Path == fileName);
+            if (node == null)
+                return "its data is not in the bundle";
+            if (offset < 0 || size > node.Size || offset > node.Size - size)
+                return "its data runs past its file";
+
+            const int HeaderV1 = 60;
+            if (size < HeaderV1 + 4)
+                return "its data is too short";
+
+            var header = new byte[HeaderV1 + 4];
+            archive.Read(node.Offset + offset, header, 0, header.Length);
+            if (header[0] != (byte)'F' || header[1] != (byte)'S' || header[2] != (byte)'B' || header[3] != (byte)'5')
+                return "its data is not FSB5";
+
+            uint version = BitConverter.ToUInt32(header, 4);
+            uint samples = BitConverter.ToUInt32(header, 8);
+            uint sampleHeaders = BitConverter.ToUInt32(header, 12);
+            uint names = BitConverter.ToUInt32(header, 16);
+            uint data = BitConverter.ToUInt32(header, 20);
+            uint codec = BitConverter.ToUInt32(header, 24);
+
+            if (version > 1)
+                return $"FSB5 version {version}";
+            if (samples != 1)
+                return $"{samples} sounds in one clip";
+
+            long headerSize = version == 0 ? HeaderV1 + 4 : HeaderV1;
+            if (headerSize + (long)sampleHeaders + names + data > size)
+                return "its FSB5 sizes run past the clip's data";
+
+            // PCM 8/16/24/32/float, IMA ADPCM, Vorbis, FADPCM: what Unity's importer writes.
+            bool known = (codec >= 1 && codec <= 5) || codec == 7 || codec == 15 || codec == 16;
+            return known ? null : $"FSB5 codec {codec}";
+        }
+
         static void ReadMesh(SerializedFile file, ObjectInfo obj, Walker walker, KitBundleInventory inventory)
         {
             var request = new FieldRequest("m_Name", "m_IndexFormat", "m_IndexBuffer", "m_VertexData.m_VertexCount");
@@ -479,6 +578,9 @@ namespace Mimicraft.MapKit
                 + (inventory.TextureCount > 0 ? $", largest {inventory.LargestTexture}" : ""));
             text.AppendLine($"meshes {inventory.MeshCount}, {inventory.MeshVertices} vertices, {inventory.MeshTriangles} triangles"
                 + (inventory.MeshCount > 0 ? $", largest {inventory.LargestMesh}" : ""));
+            if (inventory.AudioClipCount > 0)
+                text.AppendLine($"sounds {inventory.AudioClipCount}, {inventory.AudioBytes / (1024 * 1024.0):0.0} MB in memory at most, "
+                    + $"longest {inventory.LongestAudioSeconds:0.0} s");
 
             if (inventory.Textures.Count > 0)
             {
@@ -1292,6 +1394,9 @@ namespace Mimicraft.MapKit
 
             public long Long(string path) =>
                 values.TryGetValue(path, out object v) ? Convert.ToInt64(v) : 0;
+
+            public double Double(string path) =>
+                values.TryGetValue(path, out object v) ? Convert.ToDouble(v) : 0d;
 
             public string String(string path) =>
                 values.TryGetValue(path, out object v) ? v as string ?? "" : "";

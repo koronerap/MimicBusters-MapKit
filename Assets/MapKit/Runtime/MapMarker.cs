@@ -189,7 +189,17 @@ namespace Mimicraft.Gameplay
                 return;
             }
 
-            Gizmos.DrawWireSphere(transform.position + Vector3.up * 0.9f, 0.4f);
+            // The player's own capsule (the Player prefab's CharacterController: 1.8 m tall, 0.4 m radius,
+            // 0.1 m off the ground), so a spawn doubles as a scale reference while laying a map out. The kit
+            // has no walking test of its own: Pack and Test opens the real game (plan §14.4).
+            Vector3 feet = transform.position + Vector3.up * 0.1f;
+            Vector3 lower = feet + Vector3.up * 0.4f;
+            Vector3 upper = feet + Vector3.up * 1.4f;
+            Gizmos.DrawWireSphere(lower, 0.4f);
+            Gizmos.DrawWireSphere(upper, 0.4f);
+            foreach (Vector3 side in new[] { Vector3.right, Vector3.left, Vector3.forward, Vector3.back })
+                Gizmos.DrawLine(lower + side * 0.4f, upper + side * 0.4f);
+
             // Which way the player will be facing when they land here.
             Gizmos.DrawRay(transform.position + Vector3.up * 0.9f, transform.forward * 1.2f);
         }

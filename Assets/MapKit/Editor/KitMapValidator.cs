@@ -26,7 +26,7 @@ namespace Mimicraft.EditorTools
         public string Text(bool turkish) => turkish ? Tr : En;
     }
 
-    public enum KitArea { Scene, MapInfo, Components, Materials, Layers, Lighting, Markers, Bounds, Budget, Packaging }
+    public enum KitArea { Scene, MapInfo, Components, Materials, Layers, Lighting, Markers, Bounds, Budget, Packaging, Logic }
 
     /// <summary>What a validation found, and the numbers the budget is held to.</summary>
     public sealed class KitValidation
@@ -88,11 +88,17 @@ namespace Mimicraft.EditorTools
 
             CheckScene(v, scene);
             KitMapDescriptor descriptor = CheckDescriptor(v, objects);
+            if (descriptor != null && KitPreview.Describe(scene) == null)
+                Add(v, KitIssueLevel.Warning, KitArea.MapInfo,
+                    "Önizleme resmi yok: haritanın kartı düz renk görünür. Descriptor'da 'Sahne görünümünden al' ya da kendi resmini seç.",
+                    "No preview picture: the map's card shows a flat colour. On the descriptor, use 'Take from the Scene view' or pick your own picture.",
+                    new UnityEngine.Object[] { descriptor.gameObject });
             CheckComponents(v, objects);
             CheckMaterials(v, objects);
             CheckLayers(v, objects);
             CheckLighting(v, scene, objects);
             CheckMarkers(v, objects, descriptor);
+            CheckLogic(v, objects);
             CheckBounds(v, objects);
             CheckBudget(v, objects);
             return v;
@@ -225,14 +231,8 @@ namespace Mimicraft.EditorTools
                 | MapMarkerModes.Deathmatch | MapMarkerModes.Gartic);
             if (modes == MapMarkerModes.None)
                 Add(v, KitIssueLevel.Error, KitArea.MapInfo,
-                    "Harita hiçbir mod için işaretlenmemiş. Descriptor'da en az birini seç: Standard, Practice ya da Deathmatch.",
-                    "The map is not marked for any mode. Tick at least one on the descriptor: Standard, Practice or Deathmatch.", target);
-
-            // Gartic has no map choice in the game: it always plays its own map (KitMapCatalog.ModesFor).
-            if ((modes & MapMarkerModes.Gartic) != 0)
-                Add(v, KitIssueLevel.Warning, KitArea.MapInfo,
-                    "Gartic (Guess the Mimic) şimdilik her zaman kendi haritasında oynanıyor; kit haritaları orada sunulmaz.",
-                    "Gartic (Guess the Mimic) always plays its own map for now; kit maps are not offered there.", target);
+                    "Harita hiçbir mod için işaretlenmemiş. Descriptor'da en az birini seç: Standard, Practice, Deathmatch ya da Gartic.",
+                    "The map is not marked for any mode. Tick at least one on the descriptor: Standard, Practice, Deathmatch or Gartic.", target);
 
             if ((modes & MapMarkerModes.Standard) != 0)
                 Add(v, KitIssueLevel.Info, KitArea.MapInfo,
@@ -538,6 +538,21 @@ namespace Mimicraft.EditorTools
                         En($"There are {points} spawn points for Deathmatch. The game puts a player at the one farthest from everyone; with fewer than {MinDeathmatchSpawns} players spawn next to each other."));
             }
 
+            // Gartic stands the others on its LobbySpawns (HiderSpawns when there are none) and the player
+            // whose turn it is on the ModelerSpawn (GarticRoundManager). Without one the modeller simply
+            // stands among the rest, which works and shows the model to nobody in particular.
+            if ((modes & MapMarkerModes.Gartic) != 0)
+            {
+                if (Count(MapMarkerKind.LobbySpawn, MapMarkerModes.Gartic) + Count(MapMarkerKind.HiderSpawn, MapMarkerModes.Gartic) == 0)
+                    Add(v, KitIssueLevel.Error, KitArea.Markers,
+                        "Gartic için doğma noktası yok. Gartic işaretli bir LobbySpawn ya da HiderSpawn ekle.",
+                        "No spawn point for Gartic. Add a LobbySpawn or HiderSpawn with Gartic ticked.");
+                if (Count(MapMarkerKind.ModelerSpawn, MapMarkerModes.Gartic) == 0)
+                    Add(v, KitIssueLevel.Warning, KitArea.Markers,
+                        "Gartic için ModelerSpawn yok. Sırası gelen oyuncu diğerlerinin arasında durur; herkesin görebileceği bir yere Gartic işaretli bir ModelerSpawn koy.",
+                        "No ModelerSpawn for Gartic. The player whose turn it is stands among the others; put a ModelerSpawn with Gartic ticked where everyone can see it.");
+            }
+
             var unused = markers.Where(m => m.Modes == MapMarkerModes.None).ToList();
             if (unused.Count > 0)
                 Add(v, KitIssueLevel.Warning, KitArea.Markers,
@@ -545,6 +560,348 @@ namespace Mimicraft.EditorTools
                     En($"{unused.Count} marker(s) have no mode ticked. No mode will use them."), unused.Select(m => m.gameObject));
 
             CheckSpawnPlacement(v, markers);
+        }
+
+        // ------------------------------------------------------------------ map logic (plan §16)
+
+        // The game's limits (MapLogic), which the kit cannot see: past them the game ignores the rest.
+        const int MaxLogicEntities = 256;
+        const int MaxLogicOutputs = 16;
+        const float MaxLogicDelay = 3600f;
+
+        /// <summary>Connections that cannot work, and chains without a delay that feed themselves: the game
+        /// cuts those at 32 steps (MapLogic.MaxChainDepth), which reads as a map that half works.</summary>
+        static void CheckLogic(KitValidation v, List<GameObject> objects)
+        {
+            List<MapEntity> entities = objects.SelectMany(o => o.GetComponents<MapEntity>()).ToList();
+            if (entities.Count == 0)
+                return;
+
+            if (entities.Count > MaxLogicEntities)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"Haritada {entities.Count} mantık varlığı var; oyun en çok {MaxLogicEntities} tanesini çalıştırır."),
+                    En($"The map has {entities.Count} logic entities; the game runs at most {MaxLogicEntities}."));
+
+            var noTarget = new List<GameObject>();
+            var wrongInput = new List<GameObject>();
+            var foreign = new List<GameObject>();
+            var wrongEvent = new List<GameObject>();
+            var badDelay = new List<GameObject>();
+            var tooMany = new List<GameObject>();
+            foreach (MapEntity entity in entities)
+            {
+                if (entity.Outputs.Count > MaxLogicOutputs)
+                    tooMany.Add(entity.gameObject);
+
+                foreach (MapOutput output in entity.Outputs)
+                {
+                    if (output == null)
+                        continue;
+                    if (!entity.Raises(output.onEvent))
+                        wrongEvent.Add(entity.gameObject);
+                    if (float.IsNaN(output.delay) || output.delay < 0f || output.delay > MaxLogicDelay)
+                        badDelay.Add(entity.gameObject);
+
+                    if (output.target == null)
+                        noTarget.Add(entity.gameObject);
+                    else if (output.target.gameObject.scene != entity.gameObject.scene)
+                        foreign.Add(entity.gameObject);
+                    else if (!output.target.Takes(output.input))
+                        wrongInput.Add(entity.gameObject);
+                }
+            }
+
+            if (noTarget.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{noTarget.Count} çıkışın hedefi yok; hiçbir şey yapmazlar."),
+                    En($"{noTarget.Count} output(s) have no target and do nothing."), noTarget);
+            if (foreign.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"{foreign.Count} çıkışın hedefi başka bir sahnede."),
+                    En($"{foreign.Count} output(s) target an entity in another scene."), foreign);
+            if (wrongInput.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"{wrongInput.Count} çıkış hedefinin almadığı bir giriş gönderiyor; oyun onları yok sayar."),
+                    En($"{wrongInput.Count} output(s) send an input their target does not take; the game ignores them."), wrongInput);
+            if (wrongEvent.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{wrongEvent.Count} çıkış varlığın hiç vermediği bir olayı bekliyor."),
+                    En($"{wrongEvent.Count} output(s) wait for an event their entity never raises."), wrongEvent);
+            if (badDelay.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"{badDelay.Count} çıkışın gecikmesi 0 ile {MaxLogicDelay} saniye arasında değil."),
+                    En($"{badDelay.Count} output(s) have a delay outside 0 to {MaxLogicDelay} seconds."), badDelay);
+            if (tooMany.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{tooMany.Count} varlığın {MaxLogicOutputs}'dan fazla çıkışı var; oyun fazlasını yok sayar."),
+                    En($"{tooMany.Count} entities have more than {MaxLogicOutputs} outputs; the game ignores the rest."), tooMany);
+
+            var loop = ZeroDelayLoop(entities);
+            if (loop != null)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"Gecikmesiz döngü: {string.Join(" → ", loop.Select(e => e.name))}. Oyun onu {32} adımda keser; döngüdeki bir çıkışa gecikme ver."),
+                    En($"A loop with no delay: {string.Join(" → ", loop.Select(e => e.name))}. The game cuts it at {32} steps; give one output in it a delay."),
+                    loop.Select(e => e.gameObject));
+
+            // Nothing that moves may be Static: batching bakes it into place, and its lightmap stays behind.
+            var frozen = entities.OfType<MapMover>()
+                .SelectMany(m => m.GetComponentsInChildren<Transform>(true).Select(t => t.gameObject))
+                .Where(o => (GameObjectUtility.GetStaticEditorFlags(o) & (StaticEditorFlags.BatchingStatic | StaticEditorFlags.ContributeGI)) != 0)
+                .Distinct()
+                .ToList();
+            if (frozen.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"Hareket eden {frozen.Count} obje (ya da çocuğu) Static işaretli. Static batching onu yerinde dondurur, bake edilen ışığı da geride kalır: Static'i kaldır, probe'lar onu gittiği yerde aydınlatır."),
+                    En($"{frozen.Count} moving object(s) (or children) are marked Static. Static batching freezes them in place and their baked light stays behind: clear Static, and probes light them wherever they go."),
+                    frozen);
+
+            // A hurt zone switched on at the start over a spawn point hurts players the moment they appear.
+            const MapMarkerKind spawnKinds = MapMarkerKind.HunterSpawn | MapMarkerKind.HiderSpawn | MapMarkerKind.LobbySpawn
+                | MapMarkerKind.ModelerSpawn | MapMarkerKind.ArenaSpawn;
+            var spawnPoints = objects.Select(o => o.GetComponent<MapMarker>()).Where(m => m != null && m.Is(spawnKinds))
+                .Select(m => m.transform.position + Vector3.up * 0.9f).ToList();
+            var onSpawns = entities.OfType<MapHurtZone>()
+                .Where(z => z.StartEnabled && spawnPoints.Any(p => InBox(z.transform, z.Center, z.Size, p)))
+                .Select(z => z.gameObject).ToList();
+            if (onSpawns.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{onSpawns.Count} hasar bölgesi bir doğma noktasını kapsıyor; oyuncular doğar doğmaz hasar alır."),
+                    En($"{onSpawns.Count} hurt zone(s) cover a spawn point; players are hurt the moment they appear."), onSpawns);
+
+            CheckTeleports(v, entities.OfType<MapTeleport>().ToList());
+            CheckSounds(v, entities.OfType<MapSound>().ToList());
+
+            var still = entities.OfType<MapMover>().Where(m => m.Stops.Length == 0).Select(m => m.gameObject).ToList();
+            if (still.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{still.Count} hareket edenin durağı yok; hiçbir yere gidemez."),
+                    En($"{still.Count} mover(s) have no stops and cannot go anywhere."), still);
+
+            var blind = entities.OfType<MapButton>().Where(b => b.GetComponentInChildren<Collider>(true) == null).Select(b => b.gameObject).ToList();
+            if (blind.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{blind.Count} düğmenin collider'ı yok; oyuncu ona bakamaz, basamaz."),
+                    En($"{blind.Count} button(s) have no collider; players cannot look at them or press them."), blind);
+
+            var unnumbered = entities.Where(e => e.EntityId <= 0).Select(e => e.gameObject).ToList();
+            var ids = entities.Where(e => e.EntityId > 0).GroupBy(e => e.EntityId).Where(g => g.Count() > 1).SelectMany(g => g).Select(e => e.gameObject).ToList();
+            if (unnumbered.Count + ids.Count > 0)
+                Add(v, KitIssueLevel.Info, KitArea.Logic,
+                    "Bazı varlıkların ağ numarası yok ya da aynı; sahneyi kaydetmek (ya da paketlemek) numaraları verir.",
+                    "Some entities have no network number, or share one; saving the scene (or packing) numbers them.",
+                    unnumbered.Concat(ids));
+        }
+
+        /// <summary>A teleport needs somewhere to send players, and that place is judged the way a spawn
+        /// point is: a player-sized capsule, nothing solid in it, a floor under it. A destination inside a
+        /// teleport's own box (or another's) sends the player on again as soon as the game lets it, a second
+        /// later, and again.</summary>
+        static void CheckTeleports(KitValidation v, List<MapTeleport> teleports)
+        {
+            if (teleports.Count == 0)
+                return;
+
+            Physics.SyncTransforms();
+            int mask = MapBoundsVolume.MapLayers;
+            var nowhere = new List<GameObject>();
+            var buried = new List<GameObject>();
+            var floating = new List<GameObject>();
+            var onward = new List<GameObject>();
+            foreach (MapTeleport teleport in teleports)
+            {
+                if (teleport.Destination == null)
+                {
+                    nowhere.Add(teleport.gameObject);
+                    continue;
+                }
+
+                Vector3 feet = teleport.Destination.position;
+                if (Physics.CheckCapsule(feet + Vector3.up * PlayerBottom, feet + Vector3.up * PlayerTop, PlayerRadius - 0.02f, mask, QueryTriggerInteraction.Ignore))
+                    buried.Add(teleport.gameObject);
+                else if (!Physics.Raycast(feet + Vector3.up * PlayerBottom, Vector3.down, PlayerBottom + GroundSearch, mask, QueryTriggerInteraction.Ignore))
+                    floating.Add(teleport.gameObject);
+
+                Vector3 body = feet + Vector3.up * 0.9f;
+                if (teleports.Any(other => other.StartEnabled && InBox(other.transform, other.Center, other.Size, body)))
+                    onward.Add(teleport.gameObject);
+            }
+
+            if (nowhere.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"{nowhere.Count} ışınlayıcının hedefi yok. Hedef olarak boş bir obje koy; oyuncu onun yerine, onun baktığı yöne gider."),
+                    En($"{nowhere.Count} teleport(s) have no destination. Give each an empty object: players arrive where it stands, facing where it faces."), nowhere);
+            if (buried.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"{buried.Count} ışınlayıcının hedefi bir şeyin içinde. Oraya giden oyuncu sıkışır."),
+                    En($"{buried.Count} teleport destination(s) are inside something. A player sent there gets stuck."), buried);
+            if (floating.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{floating.Count} ışınlayıcı hedefinin altında {GroundSearch:0} metre içinde zemin yok."),
+                    En($"{floating.Count} teleport destination(s) have no floor within {GroundSearch:0} metres below."), floating);
+            if (onward.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{onward.Count} ışınlayıcının hedefi açık başlayan bir ışınlayıcının kutusunda; oyuncu oraya varınca bir saniye sonra yine ışınlanır."),
+                    En($"{onward.Count} teleport destination(s) stand in the box of a teleport that starts enabled; a player arriving there is sent on again a second later."), onward);
+        }
+
+        /// <summary>The game's sound limits (KitMapRules: 32 MB together, two minutes each, mono or stereo up
+        /// to 48 kHz, no tracker modules), estimated from the clips' import settings. Pack measures the
+        /// real bundle.</summary>
+        static void CheckSounds(KitValidation v, List<MapSound> sounds)
+        {
+            var noClip = new List<GameObject>();
+            var refused = new List<GameObject>();
+            var reasons = new SortedSet<string>();
+            double total = 0d;
+
+            foreach (MapSound sound in sounds)
+            {
+                AudioClip clip = sound.Clip;
+                if (clip == null)
+                {
+                    noClip.Add(sound.gameObject);
+                    continue;
+                }
+
+                string path = AssetDatabase.GetAssetPath(clip);
+                string extension = Path.GetExtension(path).ToLowerInvariant();
+                bool tracker = extension == ".mod" || extension == ".xm" || extension == ".it" || extension == ".s3m";
+                bool wrong = false;
+                if (tracker)
+                {
+                    reasons.Add(T("tracker modülü (.mod, .xm, .it, .s3m)", "a tracker module (.mod, .xm, .it, .s3m)"));
+                    wrong = true;
+                }
+                if (clip.channels > 2)
+                {
+                    reasons.Add(T("ikiden çok kanal (Import Settings'te Force To Mono ya da stereo bir dosya)", "more than two channels"));
+                    wrong = true;
+                }
+                if (clip.frequency > 48000)
+                {
+                    reasons.Add(T("48000 Hz'ten yüksek (Import Settings'te Sample Rate Setting'i 48000'e çek)", "above 48000 Hz (set Sample Rate Setting to 48000)"));
+                    wrong = true;
+                }
+                if (clip.length > KitMapRules.MaxAudioSeconds)
+                {
+                    reasons.Add(T($"{KitMapRules.MaxAudioSeconds:0} saniyeden uzun", $"longer than {KitMapRules.MaxAudioSeconds:0} seconds"));
+                    wrong = true;
+                }
+                if (wrong)
+                    refused.Add(sound.gameObject);
+
+                // Decompress On Load holds 16-bit PCM of the whole clip; the others about an eighth of it.
+                double pcm = clip.length * clip.frequency * Math.Max(1, clip.channels) * 2d;
+                bool decompressed = AssetImporter.GetAtPath(path) is AudioImporter importer
+                    && importer.defaultSampleSettings.loadType == AudioClipLoadType.DecompressOnLoad;
+                total += decompressed ? pcm : pcm / 8d;
+            }
+
+            if (noClip.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{noClip.Count} sesin klibi yok; çalmazlar."),
+                    En($"{noClip.Count} sound(s) have no clip and play nothing."), noClip);
+            if (refused.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"{refused.Count} sesi oyun reddeder: {string.Join("; ", reasons)}."),
+                    En($"The game refuses {refused.Count} sound(s): {string.Join("; ", reasons)}."), refused);
+            if (total > KitMapRules.MaxAudioBytes)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"Sesler bellekte yaklaşık {total / 1048576d:0} MB tutar; sınır {KitMapRules.MaxAudioBytes >> 20} MB. Uzun sesleri Compressed In Memory ya da Streaming yükle, kısalt ya da azalt."),
+                    En($"The sounds take about {total / 1048576d:0} MB in memory; the limit is {KitMapRules.MaxAudioBytes >> 20} MB. Load long ones Compressed In Memory or Streaming, shorten them or use fewer."),
+                    sounds.Select(s => s.gameObject));
+        }
+
+        static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
+
+        static bool InBox(Transform box, Vector3 center, Vector3 size, Vector3 worldPoint)
+        {
+            Vector3 local = box.InverseTransformPoint(worldPoint) - center;
+            return Mathf.Abs(local.x) <= Mathf.Abs(size.x) * 0.5f && Mathf.Abs(local.y) <= Mathf.Abs(size.y) * 0.5f
+                && Mathf.Abs(local.z) <= Mathf.Abs(size.z) * 0.5f;
+        }
+
+        /// <summary>Whether this input makes its target raise an event in the same step, as the game's
+        /// MapLogic.Apply does: a press, a relay's trigger, a counter's change, a mover sent somewhere (or let
+        /// go on), the activator inputs. Switching things on and off, sounds and effects raise nothing then:
+        /// a trigger notices players on the game's next check, a sound finishes when its clip has played.
+        /// </summary>
+        static bool RaisesAtOnce(MapEntity target, MapInput input)
+        {
+            switch (target)
+            {
+                case MapButton _:
+                    return input == MapInput.Press;
+                case MapRelay _:
+                    return input == MapInput.Trigger;
+                case MapCounter _:
+                    return input == MapInput.Add || input == MapInput.Subtract || input == MapInput.SetValue || input == MapInput.ResetCount;
+                case MapMover _:
+                    // Enable and Toggle carry on a journey that Disable paused, which can start it again.
+                    return input != MapInput.Pause && input != MapInput.Disable;
+                case MapHurtZone _:
+                    return input == MapInput.HurtActivator;
+                case MapTeleport _:
+                    return input == MapInput.TeleportActivator;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>A cycle of outputs without a delay, as the entities along it, or null. An input with no
+        /// delay runs in the same frame as the event that caused it, so such a cycle never waits. Only inputs
+        /// that make their target raise an event there and then close one (RaisesAtOnce): a button switching
+        /// itself off, or a tune that starts the other one when it finishes, is no loop.</summary>
+        static List<MapEntity> ZeroDelayLoop(List<MapEntity> entities)
+        {
+            var edges = new Dictionary<MapEntity, List<MapEntity>>();
+            foreach (MapEntity entity in entities)
+            {
+                edges[entity] = entity.Outputs
+                    .Where(o => o != null && o.target != null && o.delay <= 0f && o.target.Takes(o.input) && RaisesAtOnce(o.target, o.input)
+                        && o.target.Outputs.Count > 0)
+                    .Select(o => o.target)
+                    .Distinct()
+                    .ToList();
+            }
+
+            var state = new Dictionary<MapEntity, int>();
+            var path = new List<MapEntity>();
+
+            List<MapEntity> Visit(MapEntity entity)
+            {
+                state[entity] = 1;
+                path.Add(entity);
+                if (edges.TryGetValue(entity, out List<MapEntity> next))
+                {
+                    foreach (MapEntity target in next)
+                    {
+                        state.TryGetValue(target, out int seen);
+                        if (seen == 1)
+                            return path.Skip(path.IndexOf(target)).Concat(new[] { target }).ToList();
+                        if (seen == 0)
+                        {
+                            List<MapEntity> found = Visit(target);
+                            if (found != null)
+                                return found;
+                        }
+                    }
+                }
+                path.RemoveAt(path.Count - 1);
+                state[entity] = 2;
+                return null;
+            }
+
+            foreach (MapEntity entity in entities)
+            {
+                if (!state.ContainsKey(entity))
+                {
+                    List<MapEntity> found = Visit(entity);
+                    if (found != null)
+                        return found;
+                }
+            }
+            return null;
         }
 
         /// <summary>A player-sized capsule at every spawn point: inside something solid, or with no floor
@@ -615,6 +972,33 @@ namespace Mimicraft.EditorTools
                             En($"'{volume.name}': {volume.NarrowCellCount} possible leak cell(s). Look for the red ones in the scene."), target);
                 }
             }
+
+            // Everywhere the game puts a player has to be inside what the bake reached: the game pulls anyone
+            // outside it somewhere else a few seconds later. The easy way to miss it: a volume with Seeds
+            // filled in starts its fill from those alone, not from the spawn points.
+            List<MapBoundsVolume> baked = volumes.Where(b => b.IsBaked && !b.IsStale).ToList();
+            if (baked.Count < volumes.Count)
+                return;
+
+            const MapMarkerKind spawnKinds = MapMarkerKind.HunterSpawn | MapMarkerKind.HiderSpawn | MapMarkerKind.LobbySpawn
+                | MapMarkerKind.ModelerSpawn | MapMarkerKind.ArenaSpawn;
+            var strandedSpawns = objects.Select(o => o.GetComponent<MapMarker>())
+                .Where(m => m != null && m.Is(spawnKinds) && !baked.Any(b => b.Contains(m.transform.position)))
+                .Select(m => m.gameObject).ToList();
+            var strandedArrivals = objects.SelectMany(o => o.GetComponents<MapTeleport>())
+                .Where(t => t.Destination != null && !baked.Any(b => b.Contains(t.Destination.position)))
+                .Select(t => t.gameObject).ToList();
+
+            if (strandedSpawns.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Bounds,
+                    Tr($"{strandedSpawns.Count} doğma noktası bake edilen oyun alanının dışında: oyun orada doğanı birkaç saniye içinde başka bir yere çeker. Noktayı taşı ya da yeniden bake et. Hacmin Seeds listesi doluysa dolgu yalnızca onlardan başlar."),
+                    En($"{strandedSpawns.Count} spawn point(s) are outside the baked play area: the game pulls a player who spawns there somewhere else within seconds. Move them, or bake again. With the volume's Seeds filled in, the fill starts from those alone."),
+                    strandedSpawns);
+            if (strandedArrivals.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Bounds,
+                    Tr($"{strandedArrivals.Count} ışınlayıcının hedefi bake edilen oyun alanının dışında: oraya gidenin yeri oyunca kayıp sayılır. Kapısı olmayan bir odaysa hacmin Seeds listesine orada bir nokta ekle, ama haritanın geri kalanı için de bir tane."),
+                    En($"{strandedArrivals.Count} teleport destination(s) are outside the baked play area: the game takes a player sent there as lost. For a room with no door, add a point in it to the volume's Seeds, and one for the rest of the map too."),
+                    strandedArrivals);
         }
 
         // ------------------------------------------------------------------ budget

@@ -102,6 +102,11 @@ namespace Mimicraft.EditorTools
                 return result;
             }
 
+            // Every map entity numbered: the number is how the network names it (MapLogicIds). Saving does it
+            // too; a scene packed straight after an edit may not have been saved since.
+            if (MapLogicIds.Ensure(scene) > 0)
+                EditorSceneManager.SaveScene(scene);
+
             KitValidation validation = KitMapValidator.Run(scene);
             if (!validation.CanPack)
             {
@@ -162,6 +167,10 @@ namespace Mimicraft.EditorTools
 
             var files = new List<string> { file };
             result.Bundles.Add(bundle);
+
+            string previewFile = TakePreview(scene, work, result);
+            if (previewFile != null)
+                files.Add(previewFile);
             var listed = new List<KitMapManifest.Bundle>
             {
                 new KitMapManifest.Bundle
@@ -177,7 +186,7 @@ namespace Mimicraft.EditorTools
             var manifest = new KitMapManifest
             {
                 formatVersion = KitMapManifest.CurrentFormat,
-                kitVersion = KitMapManifest.CurrentKitVersion,
+                kitVersion = RequiredKitVersion(scene),
                 unityVersion = Application.unityVersion,
                 name = result.MapName,
                 description = descriptor.Description ?? "",
@@ -186,6 +195,15 @@ namespace Mimicraft.EditorTools
                 sceneName = scene.name,
                 bundles = listed.ToArray(),
             };
+            if (previewFile != null)
+            {
+                manifest.preview = new KitMapManifest.Preview
+                {
+                    file = KitPreviewImage.FileName,
+                    sha256 = KitMapManifest.Sha256File(previewFile),
+                    size = new FileInfo(previewFile).Length,
+                };
+            }
             string manifestText = JsonUtility.ToJson(manifest, true);
 
             result.Output = Path.GetFullPath(Path.Combine(OutputRoot, id));
@@ -202,6 +220,43 @@ namespace Mimicraft.EditorTools
             Debug.Log(Summary(result));
             return result;
         }
+
+        /// <summary>The card picture (KitPreview), written beside the bundle; null, with a note, when the map
+        /// has nothing to take it from or the render failed. A picture is not worth a failed pack: the map
+        /// still plays, its card is only plain.</summary>
+        static string TakePreview(Scene scene, string work, Result result)
+        {
+            try
+            {
+                byte[] png = KitPreview.Capture(scene, out string why);
+                if (png == null)
+                {
+                    result.Notes.Add(T("Önizleme resmi yok, kart düz renk görünür: ", "No preview picture, the card shows a flat colour: ") + why);
+                    return null;
+                }
+
+                string path = Path.Combine(work, KitPreviewImage.FileName);
+                File.WriteAllBytes(path, png);
+                return path;
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                result.Notes.Add(T("Önizleme resmi çekilemedi; harita resimsiz paketlendi.", "The preview picture could not be taken; the map was packed without one."));
+                return null;
+            }
+        }
+
+        /// <summary>A file the packer writes into a map folder: the manifest, a bundle, the picture.</summary>
+        static bool IsPackageFile(string name) =>
+            name == KitMapId.ManifestFile || name == KitPreviewImage.FileName
+            || (name.StartsWith("map.") && name.EndsWith(".bundle"));
+
+        /// <summary>The oldest kit version a game must read to play this map: 2 once it has map logic, 1
+        /// otherwise. Written instead of the kit's own version, so a map that uses nothing new opens in a game
+        /// that has not heard of map logic.</summary>
+        public static int RequiredKitVersion(Scene scene) =>
+            scene.GetRootGameObjects().Any(root => root.GetComponentInChildren<MapEntity>(true) != null) ? 2 : 1;
 
         static KitMapDescriptor FindDescriptor(Scene scene) =>
             scene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren<KitMapDescriptor>(true)).First();
@@ -287,8 +342,7 @@ namespace Mimicraft.EditorTools
             Directory.CreateDirectory(result.Output);
             foreach (string old in Directory.GetFiles(result.Output))
             {
-                string name = Path.GetFileName(old);
-                if (name == KitMapId.ManifestFile || (name.StartsWith("map.") && name.EndsWith(".bundle")))
+                if (IsPackageFile(Path.GetFileName(old)))
                     File.Delete(old);
             }
 
@@ -312,8 +366,7 @@ namespace Mimicraft.EditorTools
                 foreach (string existing in Directory.GetFiles(installed))
                 {
                     string name = Path.GetFileName(existing);
-                    bool ours = name == KitMapId.ManifestFile || (name.StartsWith("map.") && name.EndsWith(".bundle"));
-                    if (!ours)
+                    if (!IsPackageFile(name))
                     {
                         result.Error = F("{0} içinde tanınmayan bir dosya var ({1}). Harita klasöründe yalnızca paketin kendi dosyaları olabilir: onu taşı ya da sil, sonra yeniden paketle.",
                             "{0} holds a file the kit did not put there ({1}). A map folder may only hold the package's own files: move or delete it, then pack again.",

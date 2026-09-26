@@ -193,6 +193,7 @@ namespace Mimicraft.EditorTools
                 case KitArea.Markers: return T("İşaretçiler", "Markers");
                 case KitArea.Bounds: return T("Harita sınırı", "Map bounds");
                 case KitArea.Budget: return T("Bütçe", "Budget");
+                case KitArea.Logic: return T("Harita mantığı", "Map logic");
                 default: return T("Paketleme", "Packaging");
             }
         }

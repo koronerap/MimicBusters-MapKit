@@ -41,7 +41,7 @@ namespace Mimicraft.EditorTools
             new Entry((int)MapMarkerModes.Deathmatch, "Deathmatch",
                 "Herkes silahlı, taraf yok.", "Everyone armed, no sides."),
             new Entry((int)MapMarkerModes.Gartic, "Gartic",
-                "Guess the Mimic. Kit haritalarında henüz yok.", "Guess the Mimic. Not on kit maps yet."),
+                "Guess the Mimic: sırayla biri modeller, diğerleri tahmin eder.", "Guess the Mimic: one models, the others guess, in turns."),
         };
 
         public static readonly Entry[] Kinds =

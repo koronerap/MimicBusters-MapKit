@@ -23,7 +23,10 @@ namespace Mimicraft.MapKit
         /// which is what the kit writes since 2026-09-24. The game reads both.</summary>
         public const int CurrentFormat = 2;
         public const int MinFormat = 1;
-        public const int CurrentKitVersion = 1;
+        /// <summary>1: the first kit. 2: map logic (plan §16). The packer writes the oldest version a map
+        /// needs (KitPack.RequiredKitVersion), so a map without logic still opens in a game that reads 1.
+        /// </summary>
+        public const int CurrentKitVersion = 2;
         public const int MinKitVersion = 1;
         public const int MaxBytes = 16 * 1024;
 
@@ -36,6 +39,23 @@ namespace Mimicraft.MapKit
         public int modes;
         public string sceneName = "";
         public Bundle[] bundles = Array.Empty<Bundle>();
+
+        /// <summary>The card picture, when the map has one (plan §14.2). JsonUtility never leaves a nested
+        /// object null, so "none" is an empty file name, which is also what a manifest from before the
+        /// field reads as. Optional in format 2: an older game ignores it.</summary>
+        public Preview preview = new Preview();
+
+        [Serializable]
+        public sealed class Preview
+        {
+            public string file = "";
+            public string sha256 = "";
+            public long size;
+        }
+
+        /// <summary>Whether the manifest names a picture. Validated: the name is the fixed one and the
+        /// size is within KitPreviewImage.MaxBytes.</summary>
+        public bool HasPreview => preview != null && !string.IsNullOrEmpty(preview.file);
 
         [Serializable]
         public sealed class Bundle
@@ -82,7 +102,21 @@ namespace Mimicraft.MapKit
                 return false;
             }
 
-            byte[] bytes = File.ReadAllBytes(path);
+            return TryParse(File.ReadAllBytes(path), out manifest, out sha256, out why);
+        }
+
+        /// <summary>The same reading and checking, over bytes that are already here: a package embedded in
+        /// the game (plan §15), whose manifest never was a file.</summary>
+        public static bool TryParse(byte[] bytes, out KitMapManifest manifest, out string sha256, out string why)
+        {
+            manifest = null;
+            sha256 = "";
+
+            if (bytes == null || bytes.Length == 0)
+                return Fail("no " + KitMapId.ManifestFile, out why);
+            if (bytes.Length > MaxBytes)
+                return Fail(KitMapId.ManifestFile + " is larger than " + MaxBytes + " bytes", out why);
+
             sha256 = Sha256Hex(bytes);
 
             string text;
@@ -143,6 +177,16 @@ namespace Mimicraft.MapKit
                     if (bundles[j].platform == bundle.platform)
                         return Fail("platform " + bundle.platform + " listed twice", out why);
                 }
+            }
+
+            if (HasPreview)
+            {
+                if (preview.file != KitPreviewImage.FileName)
+                    return Fail("the preview file must be " + KitPreviewImage.FileName, out why);
+                if (!IsHex(preview.sha256, 64))
+                    return Fail("the preview hash is not SHA-256 hex", out why);
+                if (preview.size <= 0 || preview.size > KitPreviewImage.MaxBytes)
+                    return Fail("the preview size is out of range", out why);
             }
 
             why = "";
