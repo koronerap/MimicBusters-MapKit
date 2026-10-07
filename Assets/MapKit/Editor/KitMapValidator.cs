@@ -82,6 +82,10 @@ namespace Mimicraft.EditorTools
             var objects = new List<GameObject>();
             foreach (GameObject root in scene.GetRootGameObjects())
             {
+                // Never saved, so never packed: the kit's own preview objects (KitGameLook) are not the map's.
+                if ((root.hideFlags & HideFlags.DontSave) != 0)
+                    continue;
+
                 foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
                     objects.Add(t.gameObject);
             }

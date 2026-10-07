@@ -11,8 +11,10 @@ namespace Mimicraft.EditorTools
     /// Map Kit ▸ Tools ▸ Lightmap Cleanup: the three things behind "overlapping UVs" warnings, glowing patches and a
     /// lightmap that grows to gigabytes, fixed on the open scene in one go.
     ///
-    /// 1. A light's Indirect Multiplier above 1 is put back to 1. It multiplies bounced light, which takes the colour of
-    ///    what it bounces off - at 12 a wooden floor lights the room yellow in patches.
+    /// 1. A light's Indirect Multiplier above 3 is brought down to 2. It multiplies bounced light, which takes the colour
+    ///    of what it bounces off - at 12 a wooden floor lights the room yellow in patches. 2 is what the game's own house
+    ///    map uses (3 on its sun); putting it all the way back to 1 darkened a map whose lights were too weak and had
+    ///    been made up for with bounce (House, 2026-10-07) - raise such lights' Intensity instead.
     /// 2. Small static objects stop taking lightmap space and are lit by the light probes instead (Receive Global
     ///    Illumination: Light Probes), as players are. "Small" is the middle one of the object's three dimensions under
     ///    a threshold: a cup or a curtain rod, not a table top. Their faces are smaller than a lightmap texel, so their
@@ -29,6 +31,10 @@ namespace Mimicraft.EditorTools
     {
         public const float DefaultSmallSize = 0.5f;
 
+        /// <summary>Indirect Multipliers above this are brought down to <see cref="IndirectTarget"/>.</summary>
+        public const float IndirectCap = 3f;
+        public const float IndirectTarget = 2f;
+
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
 
         [MenuItem("Map Kit/Tools/Lightmap Cleanup", priority = 61)]
@@ -36,10 +42,10 @@ namespace Mimicraft.EditorTools
         {
             Scene scene = SceneManager.GetActiveScene();
             if (!EditorUtility.DisplayDialog("Lightmap Cleanup",
-                    T($"'{scene.name}' sahnesinde: 1'den büyük Indirect Multiplier'lar 1 olur, {DefaultSmallSize} m'den küçük " +
+                    T($"'{scene.name}' sahnesinde: {IndirectCap}'ten büyük Indirect Multiplier'lar {IndirectTarget} olur, {DefaultSmallSize} m'den küçük " +
                       "statik objeler ışık sondalarından aydınlanır, modellerin lightmap UV payları sahnenin çözünürlüğüne " +
                       "göre ayarlanıp yeniden içe aktarılır. Sahne değişiklikleri geri alınabilir. Sonra yeniden bake et.",
-                      $"In '{scene.name}': Indirect Multipliers above 1 become 1, static objects smaller than {DefaultSmallSize} m are " +
+                      $"In '{scene.name}': Indirect Multipliers above {IndirectCap} become {IndirectTarget}, static objects smaller than {DefaultSmallSize} m are " +
                       "lit by the light probes, and the models' lightmap UV margins are set for the scene's resolution and " +
                       "reimported. Scene changes can be undone. Bake again afterwards."),
                     T("Uygula", "Apply"), T("Vazgeç", "Cancel")))
@@ -70,13 +76,13 @@ namespace Mimicraft.EditorTools
             int lightsChanged = 0;
             foreach (Light light in lights)
             {
-                if (light.bounceIntensity <= 1.001f)
+                if (light.bounceIntensity <= IndirectCap + 0.001f)
                     continue;
 
-                report.AppendLine(T($"Işık '{light.name}': Indirect Multiplier {light.bounceIntensity:0.##} -> 1",
-                    $"Light '{light.name}': Indirect Multiplier {light.bounceIntensity:0.##} -> 1"));
+                report.AppendLine(T($"Işık '{light.name}': Indirect Multiplier {light.bounceIntensity:0.##} -> {IndirectTarget}",
+                    $"Light '{light.name}': Indirect Multiplier {light.bounceIntensity:0.##} -> {IndirectTarget}"));
                 Undo.RecordObject(light, "Lightmap Cleanup");
-                light.bounceIntensity = 1f;
+                light.bounceIntensity = IndirectTarget;
                 PrefabUtility.RecordPrefabInstancePropertyModifications(light);
                 lightsChanged++;
             }
