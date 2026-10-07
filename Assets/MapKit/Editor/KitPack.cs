@@ -149,10 +149,12 @@ namespace Mimicraft.EditorTools
             string file;
             Bundle bundle;
             uint crc;
+            string why;
             try
             {
                 EditorUtility.DisplayProgressBar("Map Kit", T("Paketleniyor...", "Packing..."), 0.5f);
-                file = Build(scene, work, out bundle, out crc);
+                ClearToolLeftovers(result);
+                file = Build(scene, work, out bundle, out crc, out why);
             }
             finally
             {
@@ -161,7 +163,10 @@ namespace Mimicraft.EditorTools
 
             if (file == null)
             {
-                result.Error = T("Paket oluşturulamadı. Ayrıntı Console'da.", "The package could not be built. The Console has the details.");
+                result.Error = string.IsNullOrEmpty(why)
+                    ? T("Paket oluşturulamadı. Ayrıntı Console'da.", "The package could not be built. The Console has the details.")
+                    : F("Paket oluşturulamadı. Unity'nin verdiği ilk hata:\n{0}\nTamamı Console'da.",
+                        "The package could not be built. The first error Unity gave:\n{0}\nThe Console has the rest.", why);
                 return result;
             }
 
@@ -280,12 +285,56 @@ namespace Mimicraft.EditorTools
             AssetDatabase.SaveAssets();
         }
 
-        /// <summary>The bundle, built and read by the pre-scan. The file, or null when Unity could not build it
-        /// (the reason is in the Console).</summary>
-        static string Build(Scene scene, string work, out Bundle bundle, out uint crc)
+        /// <summary>
+        /// Removes what an editor tool left hidden in memory, before the build trips over it.
+        ///
+        /// Unity runs every package's [PostProcessScene] over the scene it builds, and ProBuilder's walks every
+        /// ProBuilder mesh LOADED - Resources.FindObjectsOfTypeAll - not only the scene's. Its New Shape tool keeps
+        /// a hidden, half-made preview shape (HideAndDontSave) and leaks one each time it is opened again; that
+        /// preview has no faces, the post-processor throws on it, and a strict build fails over an object that
+        /// is in no scene and would never have been packed. Seen 2026-10-04: Dust2 had no ProBuilder at all.
+        ///
+        /// Only objects marked not to be saved are touched, so nothing of any scene changes; the tool makes a
+        /// new preview when it is next used. Found by type name: the kit does not depend on ProBuilder.
+        /// </summary>
+        static void ClearToolLeftovers(Result result)
+        {
+            // An open shape tool would only make its preview again; leave it first.
+            Type tool = UnityEditor.EditorTools.ToolManager.activeToolType;
+            if (tool != null && (tool.Namespace ?? "").StartsWith("UnityEditor.ProBuilder", StringComparison.Ordinal))
+                UnityEditor.EditorTools.ToolManager.RestorePreviousPersistentTool();
+
+            var leftovers = new HashSet<GameObject>();
+            foreach (MonoBehaviour behaviour in Resources.FindObjectsOfTypeAll<MonoBehaviour>())
+            {
+                if (behaviour == null || EditorUtility.IsPersistent(behaviour)
+                    || behaviour.GetType().FullName != "UnityEngine.ProBuilder.ProBuilderMesh")
+                    continue;
+
+                GameObject owner = behaviour.gameObject;
+                if ((owner.hideFlags & HideFlags.DontSave) != 0)
+                    leftovers.Add(owner);
+            }
+
+            foreach (GameObject leftover in leftovers)
+            {
+                if (leftover != null)
+                    UnityEngine.Object.DestroyImmediate(leftover);
+            }
+
+            if (leftovers.Count > 0)
+                Debug.Log($"[KitPack] Removed {leftovers.Count} hidden ProBuilder preview object(s) left in memory by its "
+                    + "shape tools; ProBuilder's build step fails on them.");
+        }
+
+        /// <summary>The bundle, built and read by the pre-scan. The file, or null when Unity could not build it,
+        /// with the first error Unity logged on the way in <paramref name="why"/> (the rest is in the Console):
+        /// "Building AssetBundle failed" on its own tells an author nothing.</summary>
+        static string Build(Scene scene, string work, out Bundle bundle, out uint crc, out string why)
         {
             bundle = new Bundle { Platform = KitMapId.AnyPlatform };
             crc = 0;
+            why = null;
 
             Directory.CreateDirectory(work);
             var build = new AssetBundleBuild
@@ -294,8 +343,16 @@ namespace Mimicraft.EditorTools
                 assetNames = new[] { scene.path },
             };
 
+            var errors = new List<string>();
+            void Collect(string message, string stack, LogType type)
+            {
+                if ((type == LogType.Error || type == LogType.Exception) && !string.IsNullOrWhiteSpace(message))
+                    errors.Add(Where(message, stack));
+            }
+
             var clock = Stopwatch.StartNew();
             AssetBundleManifest built;
+            Application.logMessageReceived += Collect;
             try
             {
                 Building = true;
@@ -310,11 +367,15 @@ namespace Mimicraft.EditorTools
             finally
             {
                 Building = false;
+                Application.logMessageReceived -= Collect;
             }
 
             string file = Path.Combine(work, build.assetBundleName);
             if (built == null || !File.Exists(file))
+            {
+                why = errors.FirstOrDefault(IsCause) ?? errors.FirstOrDefault();
                 return null;
+            }
 
             BuildPipeline.GetCRCForAssetBundle(file, out crc);
             bundle.Size = new FileInfo(file).Length;
@@ -335,6 +396,29 @@ namespace Mimicraft.EditorTools
             }
 
             return file;
+        }
+
+        /// <summary>Unity's own closing lines, which say that the build failed but not why.</summary>
+        static bool IsCause(string error) =>
+            !error.StartsWith("Building AssetBundle failed", StringComparison.Ordinal)
+            && !error.StartsWith("Error building Player", StringComparison.Ordinal)
+            && !error.StartsWith("Failed to process scene before export", StringComparison.Ordinal);
+
+        /// <summary>The message, and for an exception the first frame of its stack that names a file - which
+        /// package threw is most of what an author needs to know.</summary>
+        static string Where(string message, string stack)
+        {
+            string first = message.Trim();
+            foreach (string line in (stack ?? "").Split('\n'))
+            {
+                int at = line.IndexOf(" in ", StringComparison.Ordinal);
+                if (at < 0)
+                    at = line.IndexOf("(at ", StringComparison.Ordinal);
+                if (at >= 0)
+                    return first + "\n  " + line.Trim();
+            }
+
+            return first;
         }
 
         static void WriteOutput(Result result, List<string> files, string manifestText)

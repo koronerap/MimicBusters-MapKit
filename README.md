@@ -58,6 +58,7 @@ which mode uses the marker as what, and warns about a kind none of the ticked mo
 | HunterDoor | Optional. An object that stays shut during the lobby and preparation and opens when the hunt begins. Only the first one counts. |
 | ModelerSpawn | Practice: where players appear, like HiderSpawn and LobbySpawn. Gartic: where the player whose turn it is models. |
 | ArenaSpawn | Optional. A 1v1 duel position (Standard). The game's Hunter room has its own. |
+| GarticComputer | Optional (Gartic). Where the game stands its computer desk; the player whose turn it is sits at it while their model stands on the ModelerSpawn. Only the first one counts. Without one, the player is hidden inside their model. |
 
 Standard needs at least one HunterSpawn and one HiderSpawn. Practice needs a HiderSpawn, LobbySpawn or
 ModelerSpawn with Practice ticked. Deathmatch uses every HunterSpawn, HiderSpawn and LobbySpawn with
@@ -78,6 +79,30 @@ of the map too, because with Seeds filled in the fill starts from those alone. T
 a spawn point or a teleport's destination ends up outside. A gap only one cell across (a slot over a
 wall, a narrow crack beside a platform) is reported as a possible leak: make gaps either tight or at
 least a metre.
+
+**Ladders.** A **Map Ladder** is a box players climb while they are in it, the way Half-Life and
+Counter-Strike climb one: pushing toward the ladder climbs it, looking up or down decides which way, the
+side keys step along it, jump lets go. Add it to an empty object (or the ladder model) and size the box in
+the Scene view with its handles. The box is the space a climbing player stands in: the rungs and the air in
+front of them. Its **blue arrow (Z) is the way the climber faces**, toward the ladder. The climb runs along
+the object's up, so for a ladder leaning on a wall tip the object on X, top toward the wall, 30 degrees at
+most. Let the top of the box reach the floor the ladder leads to, a little above it if anything. The model
+itself may be solid; players do not need to touch it.
+
+**Map variants.** Parts of the map can come out differently every round, so Hunters cannot learn the map by
+heart. Put a **Map Variant Group** on an empty object and make each version of that part a **direct child**
+of it: a corridor open, the same corridor blocked, crates stacked three ways. Each round the game switches
+ONE child on and the others off; the server chooses and everybody sees the same. **Modes** says which modes
+choose (Standard by default); in the others the children stay as you left them in the scene. The group's
+inspector lists the versions with a **Show** button each, to build and check one at a time.
+- **Weights:** add a **Map Variant Option** to a child to make it more or less likely (1 without one; 0 never).
+- **Avoid Repeat** (on by default): last round's version is not chosen again while another can be.
+- **Link Id:** groups with the same id choose the same child number, so two halves of one idea agree: a
+  door shut here while a gap opens there.
+- Groups can sit inside another group's versions.
+- Spawn points inside a version are used only in the rounds that version is on.
+- Do not mark anything inside a version **Occluder Static**: occlusion culling would treat it as always
+  there, and whatever stands behind it would vanish in the rounds it is off. The validator warns about it.
 
 **Lighting.** Keep the lighting settings the new map came with: Mixed lighting in **Shadowmask** mode,
 **Directional** lightmaps, **Realtime Global Illumination off**. The game carries shaders for this
@@ -195,7 +220,7 @@ game's own code.
 - **Components:** Mesh Filter, Mesh Renderer, LOD Group, Box, Sphere, Capsule and Mesh Colliders, Light,
   Reflection Probe, Light Probe Group, Occlusion Area and Portal, Adaptive Probe Volume, Volume, and the
   kit's own components (Map Marker, Map Mode Object, Map Bounds Volume, Penetrable Surface, Probe Volume
-  Region, Kit Map Descriptor) and the map logic components. No scripts of your own, and no cameras, audio
+  Region, Kit Map Descriptor, Map Ladder, Map Variant Group, Map Variant Option) and the map logic components. No scripts of your own, and no cameras, audio
   sources, particle systems, UI, video, terrain, animation or physics bodies. Sound and effects come
   through Map Sound and Map Effect.
 - **Shaders:** Universal Render Pipeline Lit, Simple Lit, Unlit, Baked Lit. Sky: Skybox Procedural,

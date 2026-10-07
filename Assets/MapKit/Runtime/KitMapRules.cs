@@ -108,6 +108,13 @@ namespace Mimicraft.MapKit
             Kit + "|Mimicraft.MapKit.MapEffect",
             Kit + "|Mimicraft.MapKit.MapTeleport",
 
+            // Read by the game's movement (PlayerMovement), like the map logic: data, never code that runs.
+            Kit + "|Mimicraft.MapKit.MapLadder",
+
+            // Read by the game's MapVariants, which chooses and switches the children: data, never code that runs.
+            Kit + "|Mimicraft.MapKit.MapVariantGroup",
+            Kit + "|Mimicraft.MapKit.MapVariantOption",
+
             Urp + "|UnityEngine.Rendering.Universal.UniversalAdditionalLightData",
 
             Core + "|UnityEngine.Rendering.ProbeVolume",
@@ -146,7 +153,10 @@ namespace Mimicraft.MapKit
             "Skybox/Panoramic",
         };
 
-        static readonly string[] layerNames = { "Default", "Ignore Raycast", "MapBlocker", "GarticMapBlocker" };
+        // Mimicable: a prop a Modelci may copy into their body (Doğrudan Taklit). A layer and not a script, so a kit
+        // map needs nothing it cannot carry. The game finds it by name; the kit gets the same slot from the game's
+        // TagManager when it is exported.
+        static readonly string[] layerNames = { "Default", "Ignore Raycast", "MapBlocker", "GarticMapBlocker", "Mimicable" };
 
         static readonly HashSet<Type> components = new HashSet<Type>
         {

@@ -98,10 +98,17 @@ namespace Mimicraft.EditorTools
             using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(scene.path)))
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button(T("Paketle", "Pack"), GUILayout.Height(28)))
-                    Run(test: false);
-                if (GUILayout.Button(T("Paketle ve Test Et", "Pack and Test"), GUILayout.Height(28)))
-                    Run(test: true);
+                bool pack = GUILayout.Button(T("Paketle", "Pack"), GUILayout.Height(28));
+                bool packAndTest = GUILayout.Button(T("Paketle ve Test Et", "Pack and Test"), GUILayout.Height(28));
+                if (pack || packAndTest)
+                {
+                    Run(test: packAndTest);
+
+                    // A pack builds, reloads the scene and shows dialogs in the middle of this OnGUI, which leaves
+                    // the layout groups opened above unbalanced ("EndLayoutGroup: BeginLayoutGroup must be called
+                    // first"). Unity's way out: end this OnGUI here and draw afresh.
+                    GUIUtility.ExitGUI();
+                }
             }
 
             if (last != null)

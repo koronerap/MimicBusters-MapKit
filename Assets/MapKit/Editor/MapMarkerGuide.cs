@@ -58,6 +58,9 @@ namespace Mimicraft.EditorTools
                 "Modelleyen oyuncunun yeri (Practice, Gartic).", "Where the modeling player stands (Practice, Gartic)."),
             new Entry((int)MapMarkerKind.ArenaSpawn, "ArenaSpawn",
                 "1v1 düello noktası (Standard).", "A 1v1 duel position (Standard)."),
+            new Entry((int)MapMarkerKind.GarticComputer, "GarticComputer",
+                "Oyun buraya modelcinin oturduğu bilgisayarı koyar (Gartic). Haritada bir tane.",
+                "The game puts the computer the modeler sits at here (Gartic). One per map."),
             new Entry((int)MapMarkerKind.HunterRoomSpawn, "HunterRoomSpawn",
                 "Avcı odasında bekleme yeri; yalnızca oyunun Avcı odası sahnesinde okunur.",
                 "A waiting spot in the Hunter room; read only in the game's Hunter room scene."),
@@ -69,7 +72,8 @@ namespace Mimicraft.EditorTools
             | MapMarkerKind.HunterDoor | MapMarkerKind.ArenaSpawn | MapMarkerKind.HunterRoomSpawn;
         const MapMarkerKind DeathmatchReads = MapMarkerKind.HunterSpawn | MapMarkerKind.HiderSpawn | MapMarkerKind.LobbySpawn;
         const MapMarkerKind PracticeReads = MapMarkerKind.ModelerSpawn | MapMarkerKind.LobbySpawn | MapMarkerKind.HiderSpawn;
-        const MapMarkerKind GarticReads = MapMarkerKind.ModelerSpawn | MapMarkerKind.LobbySpawn | MapMarkerKind.HiderSpawn;
+        const MapMarkerKind GarticReads = MapMarkerKind.ModelerSpawn | MapMarkerKind.LobbySpawn | MapMarkerKind.HiderSpawn
+            | MapMarkerKind.GarticComputer;
 
         /// <summary>The kinds a map mode reads from a map.</summary>
         public static MapMarkerKind Reads(MapMarkerModes mode)

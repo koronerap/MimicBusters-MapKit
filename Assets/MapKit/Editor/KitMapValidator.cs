@@ -99,6 +99,8 @@ namespace Mimicraft.EditorTools
             CheckLighting(v, scene, objects);
             CheckMarkers(v, objects, descriptor);
             CheckLogic(v, objects);
+            CheckLadders(v, objects);
+            CheckVariants(v, objects);
             CheckBounds(v, objects);
             CheckBudget(v, objects);
             return v;
@@ -551,6 +553,12 @@ namespace Mimicraft.EditorTools
                     Add(v, KitIssueLevel.Warning, KitArea.Markers,
                         "Gartic için ModelerSpawn yok. Sırası gelen oyuncu diğerlerinin arasında durur; herkesin görebileceği bir yere Gartic işaretli bir ModelerSpawn koy.",
                         "No ModelerSpawn for Gartic. The player whose turn it is stands among the others; put a ModelerSpawn with Gartic ticked where everyone can see it.");
+
+                // The game stands its console on one of them (GarticRoundManager), the first by position.
+                if (Count(MapMarkerKind.GarticComputer, MapMarkerModes.Gartic) > 1)
+                    Add(v, KitIssueLevel.Warning, KitArea.Markers,
+                        "Gartic için birden fazla GarticComputer var. Oyun yalnızca birine bilgisayar koyar (konuma göre ilkine); fazlasını sil.",
+                        "More than one GarticComputer for Gartic. The game puts a computer on only one (the first by position); delete the rest.");
             }
 
             var unused = markers.Where(m => m.Modes == MapMarkerModes.None).ToList();
@@ -696,6 +704,108 @@ namespace Mimicraft.EditorTools
         /// point is: a player-sized capsule, nothing solid in it, a floor under it. A destination inside a
         /// teleport's own box (or another's) sends the player on again as soon as the game lets it, a second
         /// later, and again.</summary>
+        /// <summary>Ladders (MapLadder): a box a player fits in, leaning at most like a ladder against a wall. The
+        /// game climbs along the object's up; one leaned past 30 degrees or rolled onto its side is no ladder anyone
+        /// climbs.</summary>
+        static void CheckLadders(KitValidation v, List<GameObject> objects)
+        {
+            List<MapLadder> ladders = objects.Select(o => o.GetComponent<MapLadder>()).Where(l => l != null).ToList();
+            if (ladders.Count == 0)
+                return;
+
+            var small = new List<GameObject>();
+            var tilted = new List<GameObject>();
+            foreach (MapLadder ladder in ladders)
+            {
+                Vector3 scale = ladder.transform.lossyScale;
+                Vector3 size = new Vector3(Mathf.Abs(ladder.Size.x * scale.x), Mathf.Abs(ladder.Size.y * scale.y),
+                    Mathf.Abs(ladder.Size.z * scale.z));
+                if (size.x < 0.3f || size.y < 1f || size.z < 0.2f)
+                    small.Add(ladder.gameObject);
+                if (Vector3.Dot(ladder.transform.up, Vector3.up) < 0.866f || Mathf.Abs(ladder.transform.right.y) > 0.17f)
+                    tilted.Add(ladder.gameObject);
+            }
+
+            if (small.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"{small.Count} merdivenin kutusu tırmanılamayacak kadar küçük: en az 0,3 m geniş, 1 m yüksek, 0,2 m derin olmalı."),
+                    En($"{small.Count} ladder box(es) are too small to climb: at least 0.3 m wide, 1 m tall and 0.2 m deep."), small);
+            if (tilted.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{tilted.Count} merdiven 30°'den fazla yatık ya da yana devrik. Merdiven yalnızca X'te, tepesi duvara doğru en çok 30° yatırılır."),
+                    En($"{tilted.Count} ladder(s) lean more than 30° or are rolled onto a side. Tip a ladder on X only, top toward the wall, 30° at most."), tilted);
+        }
+
+        /// <summary>Map variants (MapVariantGroup): a group needs two versions to vary, a mode to vary in, and a version
+        /// it can pick. An Occluder Static object inside a version is baked into occlusion culling as a wall that is
+        /// always there, so whatever stands behind it vanishes in the rounds it is switched off. Spawn markers inside a
+        /// version are fine and used only while it is on - said, so it is not a surprise.</summary>
+        static void CheckVariants(KitValidation v, List<GameObject> objects)
+        {
+            List<MapVariantGroup> groups = objects.Select(o => o.GetComponent<MapVariantGroup>()).Where(g => g != null).ToList();
+            List<MapVariantOption> options = objects.Select(o => o.GetComponent<MapVariantOption>()).Where(o => o != null).ToList();
+            if (groups.Count == 0 && options.Count == 0)
+                return;
+
+            var single = new List<GameObject>();
+            var noMode = new List<GameObject>();
+            var noWeight = new List<GameObject>();
+            var occluders = new List<GameObject>();
+            var markers = new List<GameObject>();
+            foreach (MapVariantGroup group in groups)
+            {
+                if (group.Count < 2)
+                    single.Add(group.gameObject);
+                if (group.Modes == MapMarkerModes.None)
+                    noMode.Add(group.gameObject);
+
+                bool any = false;
+                for (int i = 0; i < group.Count; i++)
+                    any |= group.WeightOf(i) > 0f;
+                if (group.Count > 0 && !any)
+                    noWeight.Add(group.gameObject);
+
+                foreach (Transform child in group.transform)
+                {
+                    foreach (Transform t in child.GetComponentsInChildren<Transform>(true))
+                    {
+                        if ((GameObjectUtility.GetStaticEditorFlags(t.gameObject) & StaticEditorFlags.OccluderStatic) != 0)
+                            occluders.Add(t.gameObject);
+                        if (t.GetComponent<MapMarker>() != null)
+                            markers.Add(t.gameObject);
+                    }
+                }
+            }
+
+            var stray = options.Where(o => o.transform.parent == null || o.transform.parent.GetComponent<MapVariantGroup>() == null)
+                .Select(o => o.gameObject).ToList();
+
+            if (noWeight.Count > 0)
+                Add(v, KitIssueLevel.Error, KitArea.Logic,
+                    Tr($"{noWeight.Count} varyasyon grubunda seçilebilecek çocuk yok: hepsinin ağırlığı 0."),
+                    En($"{noWeight.Count} variant group(s) have no child that can be picked: every weight is 0."), noWeight);
+            if (single.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{single.Count} varyasyon grubunun ikiden az çocuğu var; her round aynısı gelir. Her versiyon grubun doğrudan çocuğu olmalı."),
+                    En($"{single.Count} variant group(s) have fewer than two children, so every round shows the same one. Each version must be a direct child of the group."), single);
+            if (noMode.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{noMode.Count} varyasyon grubunda hiçbir mod seçili değil; hiçbir modda değişmez."),
+                    En($"{noMode.Count} variant group(s) have no mode ticked, so they never change."), noMode);
+            if (occluders.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"Varyasyonların içinde {occluders.Count} obje Occluder Static işaretli. Occlusion culling onları hep orada sayar; kapalı oldukları roundlarda arkalarındaki şeyler görünmez olur. Bu işareti kaldır."),
+                    En($"{occluders.Count} object(s) inside variants are Occluder Static. Occlusion culling treats them as always there, so whatever stands behind them disappears in the rounds they are off. Clear the flag."), occluders);
+            if (stray.Count > 0)
+                Add(v, KitIssueLevel.Warning, KitArea.Logic,
+                    Tr($"{stray.Count} Map Variant Option bir varyasyon grubunun doğrudan çocuğunda değil; hiçbir şey yapmaz."),
+                    En($"{stray.Count} Map Variant Option(s) are not on a direct child of a variant group and do nothing."), stray);
+            if (markers.Count > 0)
+                Add(v, KitIssueLevel.Info, KitArea.Logic,
+                    Tr($"{markers.Count} işaretçi bir varyasyonun içinde; yalnızca o versiyon seçildiği roundlarda kullanılır."),
+                    En($"{markers.Count} marker(s) sit inside a variant and are used only in the rounds that version is chosen."), markers);
+        }
+
         static void CheckTeleports(KitValidation v, List<MapTeleport> teleports)
         {
             if (teleports.Count == 0)

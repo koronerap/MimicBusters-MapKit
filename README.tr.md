@@ -57,6 +57,7 @@ olarak kullandığını yazar ve seçili modların hiçbirinin okumadığı bir 
 | HunterDoor | İsteğe bağlı. Lobide ve hazırlıkta kapalı duran, av başlayınca açılan obje. Yalnızca ilki sayılır. |
 | ModelerSpawn | Practice: oyuncuların belirdiği yer, HiderSpawn ve LobbySpawn gibi. Gartic: sırası gelen oyuncunun modellediği yer. |
 | ArenaSpawn | İsteğe bağlı. 1v1 düello noktası (Standard). Oyunun Avcı odasında kendi noktaları var. |
+| GarticComputer | İsteğe bağlı (Gartic). Oyunun bilgisayar masasını koyduğu yer; sırası gelen oyuncu, modeli ModelerSpawn'da dururken bu masada oturur. Yalnızca ilki sayılır. Yoksa oyuncu modelinin içinde gizlidir. |
 
 Standard için en az bir HunterSpawn ve bir HiderSpawn gerekir. Practice için Practice işaretli bir
 HiderSpawn, LobbySpawn ya da ModelerSpawn gerekir. Deathmatch, Deathmatch işaretli bütün HunterSpawn,
@@ -76,6 +77,30 @@ Bake, havayı doğma noktalarından dışarı doğru yarım metrelik hücrelerle
 geri kalanı için de bir tane; çünkü Seeds doluyken dolgu yalnızca onlardan başlar. Bir doğma noktası ya da
 ışınlayıcı hedefi dışarıda kalırsa doğrulayıcı söyler. Tek hücre genişliğindeki boşluk (duvar üstünde bir
 yarık, platformun yanında dar bir çatlak) sızıntı adayı sayılır: boşlukları ya sıkı ya en az bir metre yap.
+
+**Merdivenler.** **Map Ladder**, içindeki oyuncunun tırmandığı bir kutudur; Half-Life ve Counter-Strike'taki
+gibi: merdivene doğru ilerlemek tırmandırır, yukarı ya da aşağı bakmak yönü seçer, yan tuşlar yana kaydırır,
+zıplamak bırakır. Boş bir objeye (ya da merdiven modeline) ekle, kutuyu Scene görünümünde tutamaçlarla
+boyutlandır. Kutu tırmanan oyuncunun durduğu boşluktur: basamaklar ve önlerindeki hava. **Mavi ok (Z)
+tırmananın baktığı yöndür**, merdivene doğru. Tırmanış objenin yukarısı boyuncadır; duvara yaslı merdiven
+için objeyi X'te, tepesi duvara doğru en çok 30 derece yatır. Kutunun üstü merdivenin çıktığı katın zeminine
+kadar, hatta biraz yukarısına uzansın. Modelin kendisi katı olabilir, oyuncunun ona değmesi gerekmez.
+
+**Harita varyasyonları.** Haritanın bazı parçaları her round farklı gelebilir; Avcılar haritayı ezberleyemez.
+Boş bir objeye **Map Variant Group** koy, o parçanın her versiyonunu onun **doğrudan çocuğu** yap: koridor
+açık, aynı koridor kapalı, kasalar üç ayrı dizilişte. Oyun her round çocuklardan BİRİNİ açar, diğerlerini
+kapatır; seçimi sunucu yapar, herkes aynısını görür. **Modes** hangi modlarda seçileceğini söyler
+(varsayılan Standard); diğer modlarda çocuklar sahnede bıraktığın gibi kalır. Grubun Inspector'ı versiyonları
+listeler, her birinde tek tek kurup kontrol etmek için **Göster** butonu vardır.
+- **Ağırlık:** bir çocuğa **Map Variant Option** ekleyerek daha sık ya da seyrek gelmesini sağla (yoksa 1;
+  0 = hiç gelmez).
+- **Avoid Repeat** (varsayılan açık): geçen roundun versiyonu, başkası varken yeniden seçilmez.
+- **Link Id:** aynı kimliği taşıyan gruplar aynı sıradaki çocuğu seçer; bir fikrin iki yarısı uyuşur:
+  burada kapı kapalıyken orada geçit açık.
+- Gruplar başka bir grubun versiyonlarının içinde olabilir.
+- Bir versiyonun içindeki doğma noktaları yalnızca o versiyonun açık olduğu roundlarda kullanılır.
+- Bir versiyonun içindeki hiçbir şeyi **Occluder Static** işaretleme: occlusion culling onu hep orada sayar,
+  kapalı olduğu roundlarda arkasındaki şeyler görünmez olur. Doğrulayıcı bunu uyarır.
 
 **Işık.** Yeni haritanın geldiği ışık ayarlarını koru: Mixed ışık **Shadowmask** modunda,
 **Directional** lightmap, **Realtime Global Illumination kapalı**. Oyun yalnızca bu düzenin
@@ -191,7 +216,7 @@ oyunun kendi koduyla bir kez daha denetler.
 - **Bileşenler:** Mesh Filter, Mesh Renderer, LOD Group, Box, Sphere, Capsule ve Mesh Collider, Light,
   Reflection Probe, Light Probe Group, Occlusion Area ve Portal, Adaptive Probe Volume, Volume ve kitin
   kendi bileşenleri (Map Marker, Map Mode Object, Map Bounds Volume, Penetrable Surface, Probe Volume
-  Region, Kit Map Descriptor) ve harita mantığı bileşenleri. Kendi script'in olamaz; kamera, ses kaynağı,
+  Region, Kit Map Descriptor, Map Ladder, Map Variant Group, Map Variant Option) ve harita mantığı bileşenleri. Kendi script'in olamaz; kamera, ses kaynağı,
   parçacık sistemi, UI, video, terrain, animasyon ya da fizik gövdesi de olamaz. Ses ve efekt Map Sound ve
   Map Effect ile gelir.
 - **Shader'lar:** Universal Render Pipeline Lit, Simple Lit, Unlit, Baked Lit. Gökyüzü: Skybox

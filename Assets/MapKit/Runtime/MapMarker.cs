@@ -54,6 +54,15 @@ namespace Mimicraft.Gameplay
         /// They can live in the Hunter room scene or in the map; both are searched. Optional, and a map
         /// without them simply has no arena - the button says so.</summary>
         ArenaSpawn = 1 << 6,
+
+        /// <summary>Gartic: where the computer stands that the modeller sits at while their body is on the
+        /// stand. The GAME puts its own console there (GarticRoundManager) - the map carries only the point, so a
+        /// kit map has it as well without a script of its own. The point is the console's root: the floor under
+        /// it, facing the way it faces.
+        ///
+        /// One per map. With several the game uses the first by position; without one the modeller stays inside
+        /// their body, as before there was a computer.</summary>
+        GarticComputer = 1 << 7,
     }
 
     /// <summary>Which modes a marker belongs to.
@@ -166,32 +175,70 @@ namespace Mimicraft.Gameplay
         /// failure is a player spawning inside the floor.</summary>
         public bool AppliesTo(MapMarkerModes target) => (modes & target) != 0;
 
+        /// <summary>How solid a figure's boxes are drawn, under their outlines: enough to read a shape from across
+        /// the map, little enough to see the floor through.</summary>
+        const float FigureFill = 0.18f;
+
         // Spawn points are usually empty GameObjects with nothing to see in the Scene view, which
-        // makes them easy to lose track of while laying a map out.
+        // makes them easy to lose track of while laying a map out. Each draws what the game will put there
+        // (MapMarkerFigures): a spawn the default character, standing where and facing the way the player
+        // will, so it doubles as a scale reference - the kit has no walking test of its own, Pack and Test
+        // opens the real game (plan §14.4).
         void OnDrawGizmos()
         {
             // First match wins, because a point can now be several things and a gizmo can only be one
             // colour. Ordered by how much it matters to spot the marker while laying a map out: a door is
             // unmistakable in shape, the two round spawns decide where a side starts, and the rest are
             // conveniences.
-            Gizmos.color =
+            Color color =
                 Is(MapMarkerKind.HunterDoor) ? new Color(0.95f, 0.85f, 0.3f, 1f) :
+                Is(MapMarkerKind.GarticComputer) ? new Color(0.35f, 0.55f, 1f, 1f) :
                 Is(MapMarkerKind.HunterRoomSpawn) ? new Color(0.95f, 0.55f, 0.15f, 1f) :
                 Is(MapMarkerKind.HunterSpawn) ? new Color(0.95f, 0.4f, 0.3f, 1f) :
                 Is(MapMarkerKind.HiderSpawn) ? new Color(0.35f, 0.75f, 0.95f, 1f) :
                 Is(MapMarkerKind.ModelerSpawn) ? new Color(0.95f, 0.6f, 0.95f, 1f) :
                 Is(MapMarkerKind.LobbySpawn) ? new Color(0.5f, 0.95f, 0.5f, 1f) :
                 new Color(0.6f, 0.6f, 0.6f, 1f);
+            Gizmos.color = color;
 
             if (Is(MapMarkerKind.HunterDoor))
             {
-                Gizmos.DrawWireCube(transform.position, Vector3.one);
+                DrawDoor(color);
                 return;
             }
 
-            // The player's own capsule (the Player prefab's CharacterController: 1.8 m tall, 0.4 m radius,
-            // 0.1 m off the ground), so a spawn doubles as a scale reference while laying a map out. The kit
-            // has no walking test of its own: Pack and Test opens the real game (plan §14.4).
+            // The game's console where the game stands it - at the point, turned with it, at its own scale
+            // (GarticRoundManager) - and the modeller sitting at it.
+            if (Is(MapMarkerKind.GarticComputer))
+            {
+                Matrix4x4 console = Matrix4x4.TRS(transform.position, transform.rotation, Vector3.one);
+                if (!MapMarkerFigures.Draw(MapMarkerFigures.Console, console, color, FigureFill))
+                {
+                    Gizmos.matrix = console;
+                    Gizmos.DrawWireCube(Vector3.up * 0.5f, Vector3.one);
+                    Gizmos.matrix = Matrix4x4.identity;
+                }
+
+                MapMarkerFigures.Draw(MapMarkerFigures.Seated, console, Color.Lerp(color, Color.white, 0.4f), FigureFill);
+                Gizmos.DrawRay(transform.position + Vector3.up * 0.5f, transform.forward * 1.2f);
+                return;
+            }
+
+            // A player is stood upright whatever the point's tilt (PlayerMovement.Upright), and at their own size
+            // whatever its scale.
+            Quaternion facing = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+            Matrix4x4 player = Matrix4x4.TRS(transform.position, facing, Vector3.one);
+            if (!MapMarkerFigures.Draw(MapMarkerFigures.Standing, player, color, FigureFill))
+                DrawCapsule();
+
+            // Which way the player will be facing when they land here.
+            Gizmos.DrawRay(transform.position + Vector3.up * 0.9f, facing * Vector3.forward * 1.2f);
+        }
+
+        /// <summary>Before anything is baked: the player's own capsule (the Player prefab's CharacterController,
+        /// 1.8 m tall, 0.4 m radius, 0.1 m off the ground).</summary>
+        void DrawCapsule()
+        {
             Vector3 feet = transform.position + Vector3.up * 0.1f;
             Vector3 lower = feet + Vector3.up * 0.4f;
             Vector3 upper = feet + Vector3.up * 1.4f;
@@ -199,9 +246,56 @@ namespace Mimicraft.Gameplay
             Gizmos.DrawWireSphere(upper, 0.4f);
             foreach (Vector3 side in new[] { Vector3.right, Vector3.left, Vector3.forward, Vector3.back })
                 Gizmos.DrawLine(lower + side * 0.4f, upper + side * 0.4f);
+        }
 
-            // Which way the player will be facing when they land here.
-            Gizmos.DrawRay(transform.position + Vector3.up * 0.9f, transform.forward * 1.2f);
+        /// <summary>The door itself: the marker IS the object the game switches off when the hunt starts, so its own
+        /// colliders say what it blocks - its renderers when it has none, a metre box when it has neither.</summary>
+        void DrawDoor(Color color)
+        {
+            bool found = false;
+            Bounds bounds = default;
+
+            foreach (Collider blocker in GetComponentsInChildren<Collider>())
+            {
+                if (!blocker.enabled || blocker.isTrigger)
+                    continue;
+
+                if (found)
+                    bounds.Encapsulate(blocker.bounds);
+                else
+                    bounds = blocker.bounds;
+                found = true;
+            }
+
+            if (!found)
+            {
+                foreach (Renderer shown in GetComponentsInChildren<Renderer>())
+                {
+                    if (found)
+                        bounds.Encapsulate(shown.bounds);
+                    else
+                        bounds = shown.bounds;
+                    found = true;
+                }
+            }
+
+            if (!found)
+            {
+                Gizmos.DrawWireCube(transform.position, Vector3.one);
+                return;
+            }
+
+            Gizmos.color = new Color(color.r, color.g, color.b, color.a * FigureFill);
+            Gizmos.DrawCube(bounds.center, bounds.size);
+            Gizmos.color = color;
+            Gizmos.DrawWireCube(bounds.center, bounds.size);
+
+            // Crossed through along its width: a way that is shut until the hunt.
+            Vector3 e = bounds.extents;
+            Vector3 across = e.x >= e.z ? new Vector3(e.x, 0f, 0f) : new Vector3(0f, 0f, e.z);
+            Vector3 up = new Vector3(0f, e.y, 0f);
+            Gizmos.DrawLine(bounds.center - across - up, bounds.center + across + up);
+            Gizmos.DrawLine(bounds.center - across + up, bounds.center + across - up);
         }
     }
 }
