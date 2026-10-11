@@ -126,7 +126,57 @@ namespace Mimicraft.Gameplay
         /// -1 means "already migrated", which is what every marker written after this change stores.</summary>
         [SerializeField, HideInInspector] int kind = -1;
 
+        // ---- the Gartic modeller's area (Modeler Spawn only)
+        //
+        // A box in this marker's own space, the way a BoxCollider's is: the modeller's model has to stay inside it
+        // while they build, and they are put at its bottom middle, Padding above the floor of it, rather than on the
+        // marker itself. Off on every marker placed before it existed, so a map that never set one plays as it did.
+
+        [Tooltip("Açıkken Gartic'te modelcinin modeli bu kutunun içinde kalmak zorunda, ve modelci işaretçinin " +
+                 "kendisinde değil kutunun tabanının ortasında (Padding kadar yukarıda) doğar. Kapalıyken eskisi " +
+                 "gibi: modelci işaretçide doğar, haritadan gelen bir alan sınırı yok.")]
+        [SerializeField] bool modelArea;
+
+        [Tooltip("Kutunun merkezi, işaretçinin yerel uzayında (BoxCollider'ın Center'ı gibi).")]
+        [SerializeField] Vector3 modelAreaCenter = new Vector3(0f, 1.5f, 0f);
+
+        [Tooltip("Kutunun boyutu, işaretçinin yerel uzayında (BoxCollider'ın Size'ı gibi). Sahnede kutunun " +
+                 "yüzlerindeki noktaları sürükleyerek de ayarlanır.")]
+        [SerializeField] Vector3 modelAreaSize = new Vector3(3f, 3f, 3f);
+
+        [Tooltip("Modelcinin kutunun tabanından ne kadar yukarıda doğduğu, kutuyla aynı birimde (işaretçinin " +
+                 "ölçeği 1 iken metre). 0 = model kutunun tabanına oturur; daha yüksekte modelci modeli bu " +
+                 "pay kadar aşağı da uzatabilir. Kutunun yüksekliğini geçemez.")]
+        [SerializeField, Min(0f)] float modelAreaPadding;
+
         public MapMarkerModes Modes => modes;
+
+        /// <summary>Whether this marker sets the Gartic modeller's area: a Modeler Spawn with its area switched on and
+        /// a box that has some size on every axis.</summary>
+        public bool HasModelArea =>
+            modelArea && Is(MapMarkerKind.ModelerSpawn)
+            && modelAreaSize.x > 0f && modelAreaSize.y > 0f && modelAreaSize.z > 0f;
+
+        public Vector3 ModelAreaCenter => modelAreaCenter;
+        public Vector3 ModelAreaSize => modelAreaSize;
+        public float ModelAreaPadding => modelAreaPadding;
+
+        /// <summary>The area's box as a matrix from a unit cube centred on the origin to the world - inside the area
+        /// is every point whose image under the inverse lies within half a unit on every axis.</summary>
+        public Matrix4x4 ModelAreaToWorld =>
+            transform.localToWorldMatrix * Matrix4x4.TRS(modelAreaCenter, Quaternion.identity, modelAreaSize);
+
+        /// <summary>Where the modeller stands, in the marker's own space: the bottom middle of the area, Padding
+        /// above it - or the marker's own origin when it sets no area.</summary>
+        public Vector3 ModelerStandPointLocal => HasModelArea
+            ? modelAreaCenter + new Vector3(0f, -modelAreaSize.y * 0.5f + ClampedPadding, 0f)
+            : Vector3.zero;
+
+        /// <summary>The same in the world: where Gartic puts the modeller, and from where their model is built
+        /// upwards.</summary>
+        public Vector3 ModelerStandPoint => transform.TransformPoint(ModelerStandPointLocal);
+
+        float ClampedPadding => Mathf.Clamp(modelAreaPadding, 0f, Mathf.Max(0f, modelAreaSize.y));
 
         /// <summary>Everything this point is. Test with <see cref="Is"/> rather than comparing - a marker
         /// that is both a lobby and a Hider spawn equals neither.</summary>
@@ -145,7 +195,15 @@ namespace Mimicraft.Gameplay
 
         void Awake() => Migrate();
 
-        void OnValidate() => Migrate();
+        void OnValidate()
+        {
+            Migrate();
+
+            // A box with no size on some axis holds nothing, and a padding above its top puts the modeller
+            // outside it.
+            modelAreaSize = Vector3.Max(modelAreaSize, new Vector3(0.1f, 0.1f, 0.1f));
+            modelAreaPadding = Mathf.Clamp(modelAreaPadding, 0f, modelAreaSize.y);
+        }
 
         /// <summary>Converts a pre-Flags ordinal exactly once. Ordinals and flags cannot be told apart by
         /// value, which is why the old one lives in its own field and is cleared as it is read.</summary>
@@ -224,6 +282,10 @@ namespace Mimicraft.Gameplay
                 return;
             }
 
+            // The Gartic modeller's area, when this point sets one (DrawModelArea), under the figure.
+            if (HasModelArea)
+                DrawModelArea(color);
+
             // A player is stood upright whatever the point's tilt (PlayerMovement.Upright), and at their own size
             // whatever its scale.
             Quaternion facing = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
@@ -233,6 +295,30 @@ namespace Mimicraft.Gameplay
 
             // Which way the player will be facing when they land here.
             Gizmos.DrawRay(transform.position + Vector3.up * 0.9f, facing * Vector3.forward * 1.2f);
+        }
+
+        /// <summary>The modeller's area: the box, faintly filled, and where the modeller stands in it - a square
+        /// on the floor of the box at Padding's height, with a line down to the floor when Padding lifts it.</summary>
+        void DrawModelArea(Color color)
+        {
+            Gizmos.matrix = transform.localToWorldMatrix;
+            Color area = Color.Lerp(color, Color.white, 0.25f);
+
+            Gizmos.color = new Color(area.r, area.g, area.b, area.a * FigureFill * 0.6f);
+            Gizmos.DrawCube(modelAreaCenter, modelAreaSize);
+            Gizmos.color = area;
+            Gizmos.DrawWireCube(modelAreaCenter, modelAreaSize);
+
+            Vector3 stand = ModelerStandPointLocal;
+            Vector3 floor = modelAreaCenter - new Vector3(0f, modelAreaSize.y * 0.5f, 0f);
+            float half = Mathf.Min(modelAreaSize.x, modelAreaSize.z) * 0.15f;
+            Gizmos.color = Color.Lerp(color, Color.white, 0.6f);
+            Gizmos.DrawWireCube(stand, new Vector3(half * 2f, 0f, half * 2f));
+            if (stand.y - floor.y > 0.001f)
+                Gizmos.DrawLine(floor, stand);
+
+            Gizmos.matrix = Matrix4x4.identity;
+            Gizmos.color = color;
         }
 
         /// <summary>Before anything is baked: the player's own capsule (the Player prefab's CharacterController,

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Mimicraft.Gameplay;
 using UnityEditor;
+using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 
 namespace Mimicraft.EditorTools
@@ -18,14 +19,24 @@ namespace Mimicraft.EditorTools
     /// The modes' boxes are MarkerMaskDrawer's, so that field looks the same everywhere else. The kinds
     /// are drawn here, because only here are the marker's modes known; everywhere else (the bounds
     /// volume's seed kinds) they keep the plain drawer.
+    ///
+    /// A Modeler Spawn gets a third section, the Gartic modeller's area (MapMarker.HasModelArea): a box set
+    /// like a BoxCollider's, by its fields or by dragging its faces in the Scene view, and a padding handle
+    /// that lifts where the modeller stands off the floor of the box.
     /// </summary>
     [CustomEditor(typeof(MapMarker)), CanEditMultipleObjects]
     public sealed class MapMarkerEditor : Editor
     {
         SerializedProperty modes;
         SerializedProperty kinds;
+        SerializedProperty modelArea;
+        SerializedProperty modelAreaCenter;
+        SerializedProperty modelAreaSize;
+        SerializedProperty modelAreaPadding;
         bool showUnread;
         GUIStyle unreadNote;
+
+        readonly BoxBoundsHandle areaHandle = new BoxBoundsHandle();
 
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
 
@@ -33,6 +44,10 @@ namespace Mimicraft.EditorTools
         {
             modes = serializedObject.FindProperty("modes");
             kinds = serializedObject.FindProperty("kinds");
+            modelArea = serializedObject.FindProperty("modelArea");
+            modelAreaCenter = serializedObject.FindProperty("modelAreaCenter");
+            modelAreaSize = serializedObject.FindProperty("modelAreaSize");
+            modelAreaPadding = serializedObject.FindProperty("modelAreaPadding");
 
             // Open by default: they are all this inspector is for.
             modes.isExpanded = true;
@@ -61,6 +76,9 @@ namespace Mimicraft.EditorTools
             else
                 DrawKinds((MapMarkerModes)modes.enumValueFlag);
 
+            if (!kinds.hasMultipleDifferentValues && (kinds.enumValueFlag & (int)MapMarkerKind.ModelerSpawn) != 0)
+                DrawModelArea();
+
             serializedObject.ApplyModifiedProperties();
 
             if (mixed)
@@ -68,6 +86,82 @@ namespace Mimicraft.EditorTools
 
             EditorGUILayout.Space(4);
             DrawVerdict((MapMarkerModes)modes.enumValueFlag, (MapMarkerKind)kinds.enumValueFlag);
+        }
+
+        /// <summary>The Gartic modeller's area: on or off, and when on the box and its padding, with a word on how to
+        /// drag them.</summary>
+        void DrawModelArea()
+        {
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField(T("3. Modelci alanı (Gartic)", "3. Modeller's area (Gartic)"), EditorStyles.boldLabel);
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                EditorGUILayout.PropertyField(modelArea, new GUIContent(T("Alanı kullan", "Use the area"),
+                    T("Açıkken Gartic'te modelcinin modeli bu kutunun içinde kalmak zorunda ve modelci kutunun " +
+                      "tabanının ortasında doğar. Kapalıyken modelci işaretçide doğar, alan sınırı yok.",
+                      "When on, the Gartic modeller's model has to stay inside this box and the modeller stands at " +
+                      "the middle of its floor. When off, the modeller stands on the marker with no area limit.")));
+
+                if (!modelArea.boolValue && !modelArea.hasMultipleDifferentValues)
+                    return;
+
+                EditorGUILayout.PropertyField(modelAreaCenter, new GUIContent(T("Merkez", "Center"), modelAreaCenter.tooltip));
+                EditorGUILayout.PropertyField(modelAreaSize, new GUIContent(T("Boyut", "Size"), modelAreaSize.tooltip));
+                EditorGUILayout.PropertyField(modelAreaPadding, new GUIContent(T("Tabandan yukarı (padding)", "Up from the floor (padding)"),
+                    modelAreaPadding.tooltip));
+
+                EditorGUILayout.HelpBox(T("Sahnede kutunun yüzlerindeki noktaları sürükleyerek boyutlandır. İçteki " +
+                    "yukarı ok, modelcinin doğduğu yüksekliği (padding) ayarlar. Model kutunun tabanına oturur, " +
+                    "ortasına değil.",
+                    "Drag the dots on the box's faces in the Scene view to size it. The arrow inside sets how high the " +
+                    "modeller stands (padding). The model rests on the floor of the box, not in its middle."), MessageType.None);
+            }
+        }
+
+        /// <summary>The area's handles, like a BoxCollider's: a dot on each face to drag it, and an arrow at the
+        /// modeller's spot for the padding. In the marker's own space, so they turn and scale with it.</summary>
+        void OnSceneGUI()
+        {
+            var marker = (MapMarker)target;
+            if (marker == null || !marker.HasModelArea)
+                return;
+
+            Color color = new Color(0.95f, 0.6f, 0.95f, 1f);
+            using (new Handles.DrawingScope(color, marker.transform.localToWorldMatrix))
+            {
+                areaHandle.center = marker.ModelAreaCenter;
+                areaHandle.size = marker.ModelAreaSize;
+                areaHandle.SetColor(color);
+
+                EditorGUI.BeginChangeCheck();
+                areaHandle.DrawHandle();
+                if (EditorGUI.EndChangeCheck())
+                {
+                    var single = new SerializedObject(marker);
+                    single.FindProperty("modelAreaCenter").vector3Value = areaHandle.center;
+                    single.FindProperty("modelAreaSize").vector3Value =
+                        Vector3.Max(areaHandle.size, new Vector3(0.1f, 0.1f, 0.1f));
+                    single.ApplyModifiedProperties();
+                }
+
+                Vector3 floor = marker.ModelAreaCenter - new Vector3(0f, marker.ModelAreaSize.y * 0.5f, 0f);
+                Vector3 stand = marker.ModelerStandPointLocal;
+                float size = HandleUtility.GetHandleSize(stand) * 0.6f;
+
+                EditorGUI.BeginChangeCheck();
+                Vector3 moved = Handles.Slider(stand, Vector3.up, size, Handles.ArrowHandleCap, 0f);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    var single = new SerializedObject(marker);
+                    single.FindProperty("modelAreaPadding").floatValue =
+                        Mathf.Clamp(moved.y - floor.y, 0f, marker.ModelAreaSize.y);
+                    single.ApplyModifiedProperties();
+                }
+
+                Handles.Label(stand + Vector3.up * size * 1.15f,
+                    string.Format(T("modelci  (padding {0:0.##})", "modeller  (padding {0:0.##})"), marker.ModelAreaPadding));
+            }
         }
 
         void DrawKinds(MapMarkerModes modeMask)
