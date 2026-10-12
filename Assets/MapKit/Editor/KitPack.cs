@@ -86,8 +86,7 @@ namespace Mimicraft.EditorTools
 
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
 
-        static string F(string tr, string en, params object[] args) =>
-            string.Format(KitEditorLanguage.Culture, KitEditorLanguage.T(tr, en), args);
+        static string F(string tr, string en, params object[] args) => KitEditorLanguage.F(tr, en, args);
 
         /// <summary>Packs the scene, and installs it when asked and when the game would accept it. The scene
         /// must be the active one: the environment the map carries is read from the active scene's

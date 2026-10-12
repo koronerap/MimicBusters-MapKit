@@ -25,6 +25,10 @@ Companion and Infestation, which use the same markers), **Practice** (free build
    with a short path.
 2. In Unity Hub: **Add > Add project from disk**, pick the unzipped folder, open it with 6000.3.8f1. The
    first import takes a few minutes.
+   When it is done, the **Welcome** window opens: choose your language there (the kit speaks English,
+   Turkish, German, Spanish, French, Italian, Brazilian Portuguese, Russian, Ukrainian, Greek, Japanese,
+   Korean and Chinese) and check that it found the game. You can open it again from **Map Kit > Welcome**,
+   and change the language later in **Map Kit > Settings** or with the gear in any kit window.
 3. **Map Kit > New Map**. Give the map a name, tick its modes, keep **Add an example room** on for your
    first map. The kit makes a scene in `Assets/Maps/<Name>/` with everything the game needs already in
    place: the map info, spawn points, the map bounds, a probe volume and the right lighting settings.

@@ -119,7 +119,7 @@ namespace Mimicraft.EditorTools
         {
             switch (input)
             {
-                case MapInput.GoToStop: return T("Durak", "Stop");
+                case MapInput.GoToStop: return T("Durak", "Stop number");
                 case MapInput.Add:
                 case MapInput.Subtract: return T("Miktar", "Amount");
                 case MapInput.SetValue: return T("Değer", "Value");

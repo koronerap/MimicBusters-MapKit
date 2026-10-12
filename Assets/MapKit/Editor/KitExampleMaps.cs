@@ -49,6 +49,7 @@ namespace Mimicraft.EditorTools
         public const string DefaultFolder = "Assets/Maps";
 
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
+        static string F(string tr, string en, params object[] args) => KitEditorLanguage.F(tr, en, args);
 
         [MenuItem("Map Kit/Examples/Logic Playground", priority = 2)]
         static void CreateFromMenu()
@@ -60,8 +61,9 @@ namespace Mimicraft.EditorTools
             if (Directory.Exists(Path.GetDirectoryName(scenePath)))
             {
                 int choice = EditorUtility.DisplayDialogComplex("Map Kit",
-                    T($"Örnek harita zaten var: {scenePath}\n\nAçılsın mı, yoksa baştan mı yapılsın? Baştan yapmak o klasördeki her şeyi (senin değişikliklerin dahil) siler.",
-                        $"The example map is already there: {scenePath}\n\nOpen it, or make it again? Making it again deletes everything in its folder, your changes included."),
+                    F("Örnek harita zaten var: {0}\n\nAçılsın mı, yoksa baştan mı yapılsın? Baştan yapmak o klasördeki her şeyi (senin değişikliklerin dahil) siler.",
+                        "The example map is already there: {0}\n\nOpen it, or make it again? Making it again deletes everything in its folder, your changes included.",
+                        scenePath),
                     T("Aç", "Open"), T("Vazgeç", "Cancel"), T("Baştan yap", "Make it again"));
                 if (choice == 1)
                     return;

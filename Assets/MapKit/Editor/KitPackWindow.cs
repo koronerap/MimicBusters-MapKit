@@ -24,7 +24,6 @@ namespace Mimicraft.EditorTools
     public sealed class KitPackWindow : EditorWindow
     {
         KitPack.Result last;
-        List<KitGame.Install> installs;
         Vector2 scroll;
         GUIStyle wrap;
 
@@ -37,7 +36,7 @@ namespace Mimicraft.EditorTools
         }
 
         [MenuItem("Map Kit/Open the Game's Maps Folder", priority = 40)]
-        static void RevealMaps()
+        internal static void RevealMaps()
         {
             Directory.CreateDirectory(KitGame.LocalMapsFolder);
             EditorUtility.RevealInFinder(KitGame.LocalMapsFolder + Path.DirectorySeparatorChar);
@@ -45,23 +44,9 @@ namespace Mimicraft.EditorTools
 
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
 
-        static string F(string tr, string en, params object[] args) =>
-            string.Format(KitEditorLanguage.Culture, KitEditorLanguage.T(tr, en), args);
+        static string F(string tr, string en, params object[] args) => KitEditorLanguage.F(tr, en, args);
 
-        void OnEnable()
-        {
-            if (!KitGame.IsPlayer(KitGame.GamePath))
-                FindGame(quiet: true);
-        }
-
-        void FindGame(bool quiet)
-        {
-            installs = KitGame.FindSteamInstalls();
-            if (installs.Count > 0 && !installs.Any(i => i.Path == KitGame.GamePath))
-                KitGame.GamePath = installs[0].Path;
-            if (!quiet && installs.Count == 0)
-                ShowNotification(new GUIContent(T("Steam'de oyun bulunamadı. Elle seç.", "The game was not found in Steam. Choose it by hand.")));
-        }
+        void OnEnable() => KitGameGui.FindIfMissing();
 
         void OnGUI()
         {
@@ -120,62 +105,7 @@ namespace Mimicraft.EditorTools
         void DrawGame()
         {
             EditorGUILayout.LabelField(T("Oyun", "Game"), EditorStyles.boldLabel);
-
-            string game = KitGame.GamePath;
-            bool found = KitGame.IsPlayer(game);
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(found ? game : T("Seçilmedi", "Not chosen"), wrap);
-                if (GUILayout.Button(T("Seç...", "Choose..."), GUILayout.Width(72)))
-                    ChooseGame();
-                if (GUILayout.Button(T("Steam'de bul", "Find in Steam"), GUILayout.Width(96)))
-                    FindGame(quiet: false);
-            }
-
-            if (installs != null && installs.Count > 1)
-            {
-                int current = installs.FindIndex(i => i.Path == game);
-                int picked = EditorGUILayout.Popup(T("Kurulu sürümler", "Installed copies"), Mathf.Max(0, current),
-                    installs.Select(i => i.Label).ToArray());
-                if (picked != current)
-                    KitGame.GamePath = installs[picked].Path;
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(F("Haritalar: {0}", "Maps: {0}", KitGame.LocalMapsFolder), EditorStyles.wordWrappedMiniLabel);
-                if (GUILayout.Button(T("Aç", "Open"), EditorStyles.miniButton, GUILayout.Width(48)))
-                    RevealMaps();
-                if (GUILayout.Button(T("Değiştir...", "Change..."), EditorStyles.miniButton, GUILayout.Width(72)))
-                    ChooseDataFolder();
-                if (!string.IsNullOrEmpty(KitGame.DataFolderOverride)
-                    && GUILayout.Button(T("Varsayılan", "Default"), EditorStyles.miniButton, GUILayout.Width(72)))
-                    KitGame.DataFolderOverride = "";
-            }
-        }
-
-        void ChooseGame()
-        {
-            string picked = Application.platform == RuntimePlatform.OSXEditor
-                ? EditorUtility.OpenFilePanel(T("Oyunu seç", "Choose the game"), "/Applications", "app")
-                : EditorUtility.OpenFilePanel(T("Oyunu seç", "Choose the game"), "",
-                    Application.platform == RuntimePlatform.WindowsEditor ? "exe" : "x86_64");
-            if (string.IsNullOrEmpty(picked))
-                return;
-            if (!KitGame.IsPlayer(picked))
-            {
-                EditorUtility.DisplayDialog("Map Kit", T("Bu bir Unity oyunu gibi görünmüyor: yanında _Data klasörü yok.",
-                    "That does not look like a Unity game: there is no _Data folder beside it."), T("Tamam", "OK"));
-                return;
-            }
-            KitGame.GamePath = picked;
-        }
-
-        void ChooseDataFolder()
-        {
-            string picked = EditorUtility.OpenFolderPanel(T("Oyunun veri klasörü", "The game's data folder"), KitGame.DataFolder, "");
-            if (!string.IsNullOrEmpty(picked))
-                KitGame.DataFolderOverride = picked;
+            KitGameGui.Draw(this);
         }
 
         void Run(bool test)

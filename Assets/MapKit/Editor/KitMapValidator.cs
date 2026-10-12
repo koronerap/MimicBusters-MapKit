@@ -898,7 +898,7 @@ namespace Mimicraft.EditorTools
                 }
                 if (clip.length > KitMapRules.MaxAudioSeconds)
                 {
-                    reasons.Add(T($"{KitMapRules.MaxAudioSeconds:0} saniyeden uzun", $"longer than {KitMapRules.MaxAudioSeconds:0} seconds"));
+                    reasons.Add(F("{0:0} saniyeden uzun", "longer than {0:0} seconds", KitMapRules.MaxAudioSeconds));
                     wrong = true;
                 }
                 if (wrong)
@@ -927,6 +927,7 @@ namespace Mimicraft.EditorTools
         }
 
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
+        static string F(string tr, string en, params object[] args) => KitEditorLanguage.F(tr, en, args);
 
         static bool InBox(Transform box, Vector3 center, Vector3 size, Vector3 worldPoint)
         {

@@ -12,6 +12,7 @@ namespace Mimicraft.EditorTools
     public sealed class MapVariantGroupEditor : Editor
     {
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
+        static string F(string tr, string en, params object[] args) => KitEditorLanguage.F(tr, en, args);
 
         public override void OnInspectorGUI()
         {
@@ -36,7 +37,7 @@ namespace Mimicraft.EditorTools
 
             var group = (MapVariantGroup)target;
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField(T($"Versiyonlar ({group.Count})", $"Versions ({group.Count})"),
+            EditorGUILayout.LabelField(F("Versiyonlar ({0})", "Versions ({0})", group.Count),
                 EditorStyles.boldLabel);
 
             if (group.Count == 0)

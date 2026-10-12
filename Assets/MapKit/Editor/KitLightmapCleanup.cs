@@ -36,18 +36,20 @@ namespace Mimicraft.EditorTools
         public const float IndirectTarget = 2f;
 
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
+        static string F(string tr, string en, params object[] args) => KitEditorLanguage.F(tr, en, args);
 
         [MenuItem("Map Kit/Tools/Lightmap Cleanup", priority = 61)]
         static void RunFromMenu()
         {
             Scene scene = SceneManager.GetActiveScene();
             if (!EditorUtility.DisplayDialog("Lightmap Cleanup",
-                    T($"'{scene.name}' sahnesinde: {IndirectCap}'ten büyük Indirect Multiplier'lar {IndirectTarget} olur, {DefaultSmallSize} m'den küçük " +
+                    F("'{0}' sahnesinde: {1}'ten büyük Indirect Multiplier'lar {2} olur, {3} m'den küçük " +
                       "statik objeler ışık sondalarından aydınlanır, modellerin lightmap UV payları sahnenin çözünürlüğüne " +
                       "göre ayarlanıp yeniden içe aktarılır. Sahne değişiklikleri geri alınabilir. Sonra yeniden bake et.",
-                      $"In '{scene.name}': Indirect Multipliers above {IndirectCap} become {IndirectTarget}, static objects smaller than {DefaultSmallSize} m are " +
+                      "In '{0}': Indirect Multipliers above {1} become {2}, static objects smaller than {3} m are " +
                       "lit by the light probes, and the models' lightmap UV margins are set for the scene's resolution and " +
-                      "reimported. Scene changes can be undone. Bake again afterwards."),
+                      "reimported. Scene changes can be undone. Bake again afterwards.",
+                      scene.name, IndirectCap, IndirectTarget, DefaultSmallSize),
                     T("Uygula", "Apply"), T("Vazgeç", "Cancel")))
                 return;
 
@@ -79,8 +81,8 @@ namespace Mimicraft.EditorTools
                 if (light.bounceIntensity <= IndirectCap + 0.001f)
                     continue;
 
-                report.AppendLine(T($"Işık '{light.name}': Indirect Multiplier {light.bounceIntensity:0.##} -> {IndirectTarget}",
-                    $"Light '{light.name}': Indirect Multiplier {light.bounceIntensity:0.##} -> {IndirectTarget}"));
+                report.AppendLine(F("Işık '{0}': Indirect Multiplier {1:0.##} -> {2}",
+                    "Light '{0}': Indirect Multiplier {1:0.##} -> {2}", light.name, light.bounceIntensity, IndirectTarget));
                 Undo.RecordObject(light, "Lightmap Cleanup");
                 light.bounceIntensity = IndirectTarget;
                 PrefabUtility.RecordPrefabInstancePropertyModifications(light);
@@ -114,10 +116,10 @@ namespace Mimicraft.EditorTools
                 lightmapped++;
             }
 
-            report.AppendLine(T($"{toProbes} küçük obje artık ışık sondalarından aydınlanıyor (Receive GI: Light Probes); " +
-                                $"{lightmapped} obje lightmap'te kaldı.",
-                $"{toProbes} small object(s) are now lit by the light probes (Receive GI: Light Probes); " +
-                $"{lightmapped} remain lightmapped."));
+            report.AppendLine(F("{0} küçük obje artık ışık sondalarından aydınlanıyor (Receive GI: Light Probes); " +
+                                "{1} obje lightmap'te kaldı.",
+                "{0} small object(s) are now lit by the light probes (Receive GI: Light Probes); " +
+                "{1} remain lightmapped.", toProbes, lightmapped));
 
             // 3. Lightmap UV margins, per model.
             float resolution = 0f;
@@ -163,8 +165,8 @@ namespace Mimicraft.EditorTools
                                    || !Mathf.Approximately(importer.secondaryUVMinObjectScale, minScale);
                     if (!changed)
                     {
-                        report.AppendLine(T($"Model '{importer.assetPath}': UV payları zaten doğru ({before}).",
-                            $"Model '{importer.assetPath}': UV margins already right ({before})."));
+                        report.AppendLine(F("Model '{0}': UV payları zaten doğru ({1}).",
+                            "Model '{0}': UV margins already right ({1}).", importer.assetPath, before));
                         continue;
                     }
 
@@ -172,22 +174,23 @@ namespace Mimicraft.EditorTools
                     importer.secondaryUVMarginMethod = ModelImporterSecondaryUVMarginMethod.Calculate;
                     importer.secondaryUVMinLightmapResolution = resolution;
                     importer.secondaryUVMinObjectScale = minScale;
-                    report.AppendLine(T($"Model '{importer.assetPath}': {before} -> generate=True margin=Calculate " +
-                                        $"minRes={resolution:0.##} minScale={minScale:0.##}; yeniden içe aktarılıyor.",
-                        $"Model '{importer.assetPath}': {before} -> generate=True margin=Calculate " +
-                        $"minRes={resolution:0.##} minScale={minScale:0.##}; reimporting."));
+                    report.AppendLine(F("Model '{0}': {1} -> generate=True margin=Calculate " +
+                                        "minRes={2:0.##} minScale={3:0.##}; yeniden içe aktarılıyor.",
+                        "Model '{0}': {1} -> generate=True margin=Calculate " +
+                        "minRes={2:0.##} minScale={3:0.##}; reimporting.", importer.assetPath, before, resolution, minScale));
                     importer.SaveAndReimport();
                 }
             }
 
             // A rough size, so the next bake's is no surprise: charts are packed to about two thirds of an atlas.
             double perAtlas = (double)maxSize * maxSize * 0.65;
-            report.AppendLine(T($"Tahmini lightmap: ~{texels / 1e6:0.0} milyon texel, {maxSize}px atlaslardan ~{System.Math.Ceiling(texels / perAtlas)} tane " +
-                                $"(çözünürlük {resolution:0.##} texel/birim). Kesin değer bake'ten sonra Lighting penceresinde.",
-                $"Estimated lightmap: ~{texels / 1e6:0.0} million texels, ~{System.Math.Ceiling(texels / perAtlas)} atlas(es) of {maxSize}px " +
-                $"(resolution {resolution:0.##} texels/unit). The real figure is in the Lighting window after the bake."));
-            report.Insert(0, T($"'{scene.name}': {lightsChanged} ışık, {toProbes} obje değişti.\n",
-                $"'{scene.name}': {lightsChanged} light(s), {toProbes} object(s) changed.\n"));
+            report.AppendLine(F("Tahmini lightmap: ~{0:0.0} milyon texel, {1}px atlaslardan ~{2} tane " +
+                                "(çözünürlük {3:0.##} texel/birim). Kesin değer bake'ten sonra Lighting penceresinde.",
+                "Estimated lightmap: ~{0:0.0} million texels, ~{2} atlas(es) of {1}px " +
+                "(resolution {3:0.##} texels/unit). The real figure is in the Lighting window after the bake.",
+                texels / 1e6, maxSize, System.Math.Ceiling(texels / perAtlas), resolution));
+            report.Insert(0, F("'{0}': {1} ışık, {2} obje değişti.\n",
+                "'{0}': {1} light(s), {2} object(s) changed.\n", scene.name, lightsChanged, toProbes));
 
             Undo.CollapseUndoOperations(group);
             if (lightsChanged > 0 || toProbes > 0)

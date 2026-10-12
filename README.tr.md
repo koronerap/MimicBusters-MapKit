@@ -24,6 +24,10 @@ Infestation dahil), **Practice** (serbest yapım, round yok), **Deathmatch** (he
 1. Kiti indir: GitHub'da **Code > Download ZIP** ya da **Releases** altındaki zip. Kısa bir yola aç.
 2. Unity Hub'da **Add > Add project from disk**, açtığın klasörü seç, 6000.3.8f1 ile aç. İlk içe aktarma
    birkaç dakika sürer.
+   Bitince **Hoş geldin** penceresi açılır: dilini orada seç (kit Türkçe, İngilizce, Almanca, İspanyolca,
+   Fransızca, İtalyanca, Brezilya Portekizcesi, Rusça, Ukraynaca, Yunanca, Japonca, Korece ve Çince
+   konuşur) ve oyunu bulup bulmadığına bak. Pencereyi **Map Kit > Welcome** ile yeniden açabilir, dili sonra
+   **Map Kit > Settings**'ten ya da kit pencerelerindeki dişli simgesinden değiştirebilirsin.
 3. **Map Kit > New Map**. Haritaya bir ad ver, modlarını seç, ilk haritanda **Örnek oda ekle** açık kalsın.
    Kit `Assets/Maps/<Ad>/` altına oyunun istediği her şeyi hazır bir sahne kurar: harita bilgisi, doğma
    noktaları, harita sınırı, probe volume ve doğru ışık ayarları.
