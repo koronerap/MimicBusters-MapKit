@@ -33,7 +33,7 @@ namespace Mimicraft.Gameplay
         [SerializeField] MapMarkerModes modes = (MapMarkerModes)~0;
 
         [Tooltip("İşaretliyse obje seçili modlarda KAPALI olur - kural tersine döner. " +
-                 "'Gartic hariç her yerde olsun' demek, üç modu tek tek seçmekten kısa ve bir mod " +
+                 "'Taklidi Tahmin Et hariç her yerde olsun' demek, üç modu tek tek seçmekten kısa ve bir mod " +
                  "eklendiğinde kendiliğinden doğru kalır.")]
         [SerializeField] bool invert;
 

@@ -84,7 +84,7 @@ namespace Mimicraft.EditorTools
                 standard = GUILayout.Toggle(standard, "Standard");
                 practice = GUILayout.Toggle(practice, "Practice");
                 deathmatch = GUILayout.Toggle(deathmatch, "Deathmatch");
-                gartic = GUILayout.Toggle(gartic, "Gartic");
+                gartic = GUILayout.Toggle(gartic, "Guess the Mimic");
             }
             exampleRoom = EditorGUILayout.ToggleLeft(
                 T("Örnek oda ekle (bir oda, bir kapı, birkaç eşya, iki lamba)", "Add an example room (a room, a door, a few props, two lamps)"),

@@ -17,9 +17,9 @@ TagManager:
   - VoxelBody
   - FPSVisual
   - MapBlocker
-  - GarticMapBlocker
+  - GuessMapBlocker
   - 
-  - 
+  - Mimicable
   - 
   - 
   - 

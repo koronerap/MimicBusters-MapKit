@@ -144,6 +144,23 @@ namespace Mimicraft.EditorTools
             }
         }
 
+        /// <summary>Values to fill a translated format with: a string that is itself a key in the table (a reason the
+        /// validator names, say) comes out in the language in force; everything else as it was.</summary>
+        public static object[] TranslateArguments(object[] args)
+        {
+            if (args == null || Language == "tr" || Language == "en")
+                return args;
+
+            var translated = (object[])args.Clone();
+            for (int i = 0; i < translated.Length; i++)
+            {
+                if (translated[i] is string text && Lookup(text, Language) is string inLanguage)
+                    translated[i] = inLanguage;
+            }
+
+            return translated;
+        }
+
         /// <summary>How numbers and dates are written in the language in force.</summary>
         public static CultureInfo Culture
         {

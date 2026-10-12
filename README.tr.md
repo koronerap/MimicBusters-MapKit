@@ -2,7 +2,8 @@
 
 **Mimic Busters** için Unity'de kendi haritanı yap, sonra tek tıkla oyunda gez.
 
-[English guide](README.md)
+<!-- languages -->
+🌐 [English](README.md) · **Türkçe** · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Italiano](README.it.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [Українська](README.uk.md) · [Ελληνικά](README.el.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh-Hans.md) · [繁體中文](README.zh-Hant.md) · [العربية](README.ar.md)
 
 Kit, oyunun kullandığı harita koduyla gelen bir Unity projesi. Haritayı sıradan bir Unity sahnesi olarak
 kurarsın, ışığını Unity'de bake edersin; kit onu oyunun kurallarıyla denetler, Windows, Linux ve macOS'un
@@ -10,7 +11,7 @@ aynı şekilde açtığı tek bir dosyaya paketler, oyununa kurar ve oyunu o har
 
 Bu kitle yapılan haritalar **Standard** (Avcılar ve Modelciler, aynı işaretçileri kullanan Companion ve
 Infestation dahil), **Practice** (serbest yapım, round yok), **Deathmatch** (herkes silahlı, taraf yok) ve
-**Gartic** (sırayla biri modeller, diğerleri tahmin eder) modlarında oynanır.
+**Taklidi Tahmin Et** (sırayla biri modeller, diğerleri tahmin eder) modlarında oynanır.
 
 ## Gerekenler
 
@@ -59,15 +60,15 @@ olarak kullandığını yazar ve seçili modların hiçbirinin okumadığı bir 
 | HunterSpawn | Av başlayınca Avcıların çıktığı yer (Standard). Hazırlığı oyunun kendi Avcı odasında geçirirler. |
 | LobbySpawn | Lobi dolarken herkesin beklediği yer. İsteğe bağlı: yoksa lobi HiderSpawn'ları kullanır. |
 | HunterDoor | İsteğe bağlı. Lobide ve hazırlıkta kapalı duran, av başlayınca açılan obje. Yalnızca ilki sayılır. |
-| ModelerSpawn | Practice: oyuncuların belirdiği yer, HiderSpawn ve LobbySpawn gibi. Gartic: sırası gelen oyuncunun modellediği yer. |
+| ModelerSpawn | Practice: oyuncuların belirdiği yer, HiderSpawn ve LobbySpawn gibi. Taklidi Tahmin Et: sırası gelen oyuncunun modellediği yer. |
 | ArenaSpawn | İsteğe bağlı. 1v1 düello noktası (Standard). Oyunun Avcı odasında kendi noktaları var. |
-| GarticComputer | İsteğe bağlı (Gartic). Oyunun bilgisayar masasını koyduğu yer; sırası gelen oyuncu, modeli ModelerSpawn'da dururken bu masada oturur. Yalnızca ilki sayılır. Yoksa oyuncu modelinin içinde gizlidir. |
+| GuessComputer | İsteğe bağlı (Taklidi Tahmin Et). Oyunun bilgisayar masasını koyduğu yer; sırası gelen oyuncu, modeli ModelerSpawn'da dururken bu masada oturur. Yalnızca ilki sayılır. Yoksa oyuncu modelinin içinde gizlidir. |
 
 Standard için en az bir HunterSpawn ve bir HiderSpawn gerekir. Practice için Practice işaretli bir
 HiderSpawn, LobbySpawn ya da ModelerSpawn gerekir. Deathmatch, Deathmatch işaretli bütün HunterSpawn,
 HiderSpawn ve LobbySpawn noktalarını kullanır ve oyuncuyu herkesten en uzak olana koyar; en az altı,
-dağınık koy. Gartic tahmin edenleri LobbySpawn'lara (yoksa HiderSpawn'lara), sırası gelen oyuncuyu tek bir
-ModelerSpawn'a koyar, hepsi Gartic işaretli; o noktayı herkesin görebileceği bir yere koy. Her birinden birkaç tane koy: dağınık, zeminde, yüzü haritaya dönük. İşaretçiden çıkan
+dağınık koy. Taklidi Tahmin Et modu tahmin edenleri LobbySpawn'lara (yoksa HiderSpawn'lara), sırası gelen oyuncuyu tek bir
+ModelerSpawn'a koyar, hepsi Taklidi Tahmin Et işaretli; o noktayı herkesin görebileceği bir yere koy. Her birinden birkaç tane koy: dağınık, zeminde, yüzü haritaya dönük. İşaretçiden çıkan
 çizgi oyuncunun bakacağı yönü gösterir. Hiçbir modu seçili olmayan işaretçiyi hiçbir mod kullanmaz.
 
 **Harita sınırı.** **Map Bounds Volume** bütün oyun alanını saran bir kutu. Bake edilince oyun,
@@ -225,7 +226,7 @@ oyunun kendi koduyla bir kez daha denetler.
   Map Effect ile gelir.
 - **Shader'lar:** Universal Render Pipeline Lit, Simple Lit, Unlit, Baked Lit. Gökyüzü: Skybox
   Procedural, Cubemap, 6 Sided ya da Panoramic.
-- **Katmanlar:** Default, Ignore Raycast, MapBlocker (görünmez duvarlar), GarticMapBlocker.
+- **Katmanlar:** Default, Ignore Raycast, MapBlocker (görünmez duvarlar), GuessMapBlocker.
 - **Işık:** yukarıdaki gibi. En çok 64 ışık.
 - **Boyut:** paket en çok 256 MB, 512 MB doku, bir dokunun uzun kenarında 8192 piksel,
   3 milyon üçgen, 6 milyon vertex ve 10.000 renderer.

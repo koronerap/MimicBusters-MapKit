@@ -156,7 +156,12 @@ namespace Mimicraft.MapKit
         // Mimicable: a prop a Modelci may copy into their body (Doğrudan Taklit). A layer and not a script, so a kit
         // map needs nothing it cannot carry. The game finds it by name; the kit gets the same slot from the game's
         // TagManager when it is exported.
-        static readonly string[] layerNames = { "Default", "Ignore Raycast", "MapBlocker", "GarticMapBlocker", "Mimicable" };
+        static readonly string[] layerNames = { "Default", "Ignore Raycast", "MapBlocker", "GuessMapBlocker", "Mimicable" };
+
+        // GuessMapBlocker's name before the mode was called Guess the Mimic. Accepted while a project's TagManager
+        // still has it, so a map does not fail validation between the code and the layer being renamed; a name the
+        // TagManager does not have is simply never matched.
+        static readonly string[] legacyLayerNames = { "GarticMapBlocker" };
 
         static readonly HashSet<Type> components = new HashSet<Type>
         {
@@ -228,6 +233,11 @@ namespace Mimicraft.MapKit
         public static bool IsLayerAllowed(int layer)
         {
             foreach (string name in layerNames)
+            {
+                if (LayerMask.NameToLayer(name) == layer)
+                    return true;
+            }
+            foreach (string name in legacyLayerNames)
             {
                 if (LayerMask.NameToLayer(name) == layer)
                     return true;

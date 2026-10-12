@@ -62,6 +62,8 @@ namespace Mimicraft.Gameplay
         ///
         /// One per map. With several the game uses the first by position; without one the modeller stays inside
         /// their body, as before there was a computer.</summary>
+        // Shown as the game calls the mode now; the member keeps its name so code and saved maps stay as they are.
+        [UnityEngine.InspectorName("GuessComputer")]
         GarticComputer = 1 << 7,
     }
 
@@ -80,6 +82,7 @@ namespace Mimicraft.Gameplay
     {
         None = 0,
         Standard = 1 << 0,
+        [UnityEngine.InspectorName("Guess the Mimic")]
         Gartic = 1 << 1,
 
         /// <summary>Practice: no round, no sides, everyone building. Its spawns are usually the same
@@ -132,7 +135,7 @@ namespace Mimicraft.Gameplay
         // while they build, and they are put at its bottom middle, Padding above the floor of it, rather than on the
         // marker itself. Off on every marker placed before it existed, so a map that never set one plays as it did.
 
-        [Tooltip("Açıkken Gartic'te modelcinin modeli bu kutunun içinde kalmak zorunda, ve modelci işaretçinin " +
+        [Tooltip("Açıkken Taklidi Tahmin Et'te modelcinin modeli bu kutunun içinde kalmak zorunda, ve modelci işaretçinin " +
                  "kendisinde değil kutunun tabanının ortasında (Padding kadar yukarıda) doğar. Kapalıyken eskisi " +
                  "gibi: modelci işaretçide doğar, haritadan gelen bir alan sınırı yok.")]
         [SerializeField] bool modelArea;

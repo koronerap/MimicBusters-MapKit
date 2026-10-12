@@ -2,7 +2,8 @@
 
 Make your own maps for **Mimic Busters** in Unity, then walk them in the game with one click.
 
-[Türkçe rehber](README.tr.md)
+<!-- languages -->
+🌐 **English** · [Türkçe](README.tr.md) · [Deutsch](README.de.md) · [Español](README.es.md) · [Français](README.fr.md) · [Italiano](README.it.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [Українська](README.uk.md) · [Ελληνικά](README.el.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [简体中文](README.zh-Hans.md) · [繁體中文](README.zh-Hant.md) · [العربية](README.ar.md)
 
 The kit is a Unity project with the same map code the game uses. You build a map as an ordinary Unity
 scene, bake its lighting in Unity, and the kit checks it against the game's rules, packs it into one file
@@ -10,7 +11,7 @@ that Windows, Linux and macOS all open, installs it in your game and starts the 
 
 Maps made with this kit can be played in **Standard** (Hunters and Modelers, and its variants
 Companion and Infestation, which use the same markers), **Practice** (free building, no rounds),
-**Deathmatch** (everyone armed, no sides) and **Gartic** (one player models, the others guess, in turns).
+**Deathmatch** (everyone armed, no sides) and **Guess the Mimic** (one player models, the others guess, in turns).
 
 ## What you need
 
@@ -60,15 +61,15 @@ which mode uses the marker as what, and warns about a kind none of the ticked mo
 | HunterSpawn | Where Hunters come out when the hunt begins (Standard). They spend the preparation time in the game's own Hunter room. |
 | LobbySpawn | Where everyone waits while the lobby fills up. Optional: without it the lobby uses the HiderSpawns. |
 | HunterDoor | Optional. An object that stays shut during the lobby and preparation and opens when the hunt begins. Only the first one counts. |
-| ModelerSpawn | Practice: where players appear, like HiderSpawn and LobbySpawn. Gartic: where the player whose turn it is models. |
+| ModelerSpawn | Practice: where players appear, like HiderSpawn and LobbySpawn. Guess the Mimic: where the player whose turn it is models. |
 | ArenaSpawn | Optional. A 1v1 duel position (Standard). The game's Hunter room has its own. |
-| GarticComputer | Optional (Gartic). Where the game stands its computer desk; the player whose turn it is sits at it while their model stands on the ModelerSpawn. Only the first one counts. Without one, the player is hidden inside their model. |
+| GuessComputer | Optional (Guess the Mimic). Where the game stands its computer desk; the player whose turn it is sits at it while their model stands on the ModelerSpawn. Only the first one counts. Without one, the player is hidden inside their model. |
 
 Standard needs at least one HunterSpawn and one HiderSpawn. Practice needs a HiderSpawn, LobbySpawn or
 ModelerSpawn with Practice ticked. Deathmatch uses every HunterSpawn, HiderSpawn and LobbySpawn with
 Deathmatch ticked and puts a player at the one farthest from everyone, so give it at least six, spread
-out. Gartic puts the guessers on LobbySpawns (HiderSpawns when there are none) and the player whose turn it
-is on one ModelerSpawn, all with Gartic ticked: put that one where everyone can see it. Put a few of each, spread out, on the floor, facing into the map. The line drawn from the marker
+out. Guess the Mimic puts the guessers on LobbySpawns (HiderSpawns when there are none) and the player whose turn it
+is on one ModelerSpawn, all with Guess the Mimic ticked: put that one where everyone can see it. Put a few of each, spread out, on the floor, facing into the map. The line drawn from the marker
 shows which way the player faces. A marker with no mode ticked is used by no mode.
 
 **Map bounds.** The **Map Bounds Volume** is a box around the whole play area. When it is baked, the
@@ -229,7 +230,7 @@ game's own code.
   through Map Sound and Map Effect.
 - **Shaders:** Universal Render Pipeline Lit, Simple Lit, Unlit, Baked Lit. Sky: Skybox Procedural,
   Cubemap, 6 Sided or Panoramic.
-- **Layers:** Default, Ignore Raycast, MapBlocker (invisible walls), GarticMapBlocker.
+- **Layers:** Default, Ignore Raycast, MapBlocker (invisible walls), GuessMapBlocker.
 - **Lighting:** as above. At most 64 lights.
 - **Size:** at most 256 MB for the package, 512 MB of textures, 8192 pixels on a texture's longest
   side, 3 million triangles, 6 million vertices and 10,000 renderers.

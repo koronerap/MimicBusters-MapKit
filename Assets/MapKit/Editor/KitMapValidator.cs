@@ -15,15 +15,34 @@ namespace Mimicraft.EditorTools
 {
     public enum KitIssueLevel { Error, Warning, Info }
 
-    /// <summary>One finding, in both languages the kit speaks, with the objects it is about.</summary>
+    /// <summary>One finding, as written in Turkish and English, with the objects it is about.</summary>
     public sealed class KitIssue
     {
         public KitIssueLevel Level;
         public KitArea Area;
         public string Tr, En;
+
+        /// <summary>The English as a format and its values, when it was written with En($"..."): the strings table is
+        /// keyed by the format, so a finding with numbers or names in it is translated too.</summary>
+        public string EnFormat;
+        public object[] Args;
+
         public UnityEngine.Object[] Targets = Array.Empty<UnityEngine.Object>();
 
-        public string Text(bool turkish) => turkish ? Tr : En;
+        /// <summary>The finding in the kit's language: Turkish and English as written, every other language from the
+        /// strings table (KitEditorLanguage), by the English format or the English itself.</summary>
+        public string Text()
+        {
+            string language = KitEditorLanguage.Language;
+            if (language == "tr")
+                return Tr;
+            if (language == "en")
+                return En;
+
+            return EnFormat != null
+                ? KitEditorLanguage.F(Tr, EnFormat, KitEditorLanguage.TranslateArguments(Args))
+                : KitEditorLanguage.T(Tr, En);
+        }
     }
 
     public enum KitArea { Scene, MapInfo, Components, Materials, Layers, Lighting, Markers, Bounds, Budget, Packaging, Logic }
@@ -63,7 +82,17 @@ namespace Mimicraft.EditorTools
     {
         static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
         static string Tr(FormattableString s) => s.ToString(Turkish);
-        static string En(FormattableString s) => s.ToString(CultureInfo.InvariantCulture);
+
+        // The finding's English, with its format and values kept by the text they made, for Add to hand to the issue.
+        // Cleared at the start of each Run.
+        static readonly Dictionary<string, FormattableString> englishFormats = new Dictionary<string, FormattableString>();
+
+        static string En(FormattableString s)
+        {
+            string text = s.ToString(CultureInfo.InvariantCulture);
+            englishFormats[text] = s;
+            return text;
+        }
 
         // Player.prefab's CharacterController: height 1.8, radius 0.4, centre 1 m up.
         const float PlayerRadius = 0.4f;
@@ -77,6 +106,7 @@ namespace Mimicraft.EditorTools
 
         public static KitValidation Run(Scene scene)
         {
+            englishFormats.Clear();
             var v = new KitValidation { SceneName = scene.name, MapId = KitMapId.SanitizeName(scene.name) };
 
             var objects = new List<GameObject>();
@@ -149,12 +179,15 @@ namespace Mimicraft.EditorTools
 
         static void Add(KitValidation v, KitIssueLevel level, KitArea area, string tr, string en, IEnumerable<UnityEngine.Object> targets = null)
         {
+            englishFormats.TryGetValue(en, out FormattableString format);
             v.Issues.Add(new KitIssue
             {
                 Level = level,
                 Area = area,
                 Tr = tr,
                 En = en,
+                EnFormat = format?.Format,
+                Args = format?.GetArguments(),
                 Targets = targets != null ? targets.Where(t => t != null).Distinct().ToArray() : Array.Empty<UnityEngine.Object>(),
             });
         }
@@ -237,8 +270,8 @@ namespace Mimicraft.EditorTools
                 | MapMarkerModes.Deathmatch | MapMarkerModes.Gartic);
             if (modes == MapMarkerModes.None)
                 Add(v, KitIssueLevel.Error, KitArea.MapInfo,
-                    "Harita hiçbir mod için işaretlenmemiş. Descriptor'da en az birini seç: Standard, Practice, Deathmatch ya da Gartic.",
-                    "The map is not marked for any mode. Tick at least one on the descriptor: Standard, Practice, Deathmatch or Gartic.", target);
+                    "Harita hiçbir mod için işaretlenmemiş. Descriptor'da en az birini seç: Standard, Practice, Deathmatch ya da Taklidi Tahmin Et.",
+                    "The map is not marked for any mode. Tick at least one on the descriptor: Standard, Practice, Deathmatch or Guess the Mimic.", target);
 
             if ((modes & MapMarkerModes.Standard) != 0)
                 Add(v, KitIssueLevel.Info, KitArea.MapInfo,
@@ -551,18 +584,18 @@ namespace Mimicraft.EditorTools
             {
                 if (Count(MapMarkerKind.LobbySpawn, MapMarkerModes.Gartic) + Count(MapMarkerKind.HiderSpawn, MapMarkerModes.Gartic) == 0)
                     Add(v, KitIssueLevel.Error, KitArea.Markers,
-                        "Gartic için doğma noktası yok. Gartic işaretli bir LobbySpawn ya da HiderSpawn ekle.",
-                        "No spawn point for Gartic. Add a LobbySpawn or HiderSpawn with Gartic ticked.");
+                        "Taklidi Tahmin Et için doğma noktası yok. Taklidi Tahmin Et işaretli bir LobbySpawn ya da HiderSpawn ekle.",
+                        "No spawn point for Guess the Mimic. Add a LobbySpawn or HiderSpawn with Guess the Mimic ticked.");
                 if (Count(MapMarkerKind.ModelerSpawn, MapMarkerModes.Gartic) == 0)
                     Add(v, KitIssueLevel.Warning, KitArea.Markers,
-                        "Gartic için ModelerSpawn yok. Sırası gelen oyuncu diğerlerinin arasında durur; herkesin görebileceği bir yere Gartic işaretli bir ModelerSpawn koy.",
-                        "No ModelerSpawn for Gartic. The player whose turn it is stands among the others; put a ModelerSpawn with Gartic ticked where everyone can see it.");
+                        "Taklidi Tahmin Et için ModelerSpawn yok. Sırası gelen oyuncu diğerlerinin arasında durur; herkesin görebileceği bir yere Taklidi Tahmin Et işaretli bir ModelerSpawn koy.",
+                        "No ModelerSpawn for Guess the Mimic. The player whose turn it is stands among the others; put a ModelerSpawn with Guess the Mimic ticked where everyone can see it.");
 
                 // The game stands its console on one of them (GarticRoundManager), the first by position.
                 if (Count(MapMarkerKind.GarticComputer, MapMarkerModes.Gartic) > 1)
                     Add(v, KitIssueLevel.Warning, KitArea.Markers,
-                        "Gartic için birden fazla GarticComputer var. Oyun yalnızca birine bilgisayar koyar (konuma göre ilkine); fazlasını sil.",
-                        "More than one GarticComputer for Gartic. The game puts a computer on only one (the first by position); delete the rest.");
+                        "Taklidi Tahmin Et için birden fazla GuessComputer var. Oyun yalnızca birine bilgisayar koyar (konuma göre ilkine); fazlasını sil.",
+                        "More than one GuessComputer for Guess the Mimic. The game puts a computer on only one (the first by position); delete the rest.");
             }
 
             var unused = markers.Where(m => m.Modes == MapMarkerModes.None).ToList();

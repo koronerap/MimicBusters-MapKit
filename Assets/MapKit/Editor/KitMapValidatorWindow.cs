@@ -79,7 +79,7 @@ namespace Mimicraft.EditorTools
             {
                 string names = issue.Targets.Length == 0 ? "" : "  [" + string.Join(", ", issue.Targets.Take(6).Select(t => t.name))
                     + (issue.Targets.Length > 6 ? ", ..." : "") + "]";
-                text.AppendLine($"  {issue.Level,-7} {AreaName(issue.Area)}: {issue.Text(turkish)}{names}");
+                text.AppendLine($"  {issue.Level,-7} {AreaName(issue.Area)}: {issue.Text()}{names}");
             }
 
             EditorGUIUtility.systemCopyBuffer = text.ToString();
@@ -87,7 +87,6 @@ namespace Mimicraft.EditorTools
             ShowNotification(new GUIContent(T("Rapor panoya ve Console'a yazıldı.", "Report copied and written to the Console.")));
         }
 
-        bool turkish => KitEditorLanguage.Turkish;
         static string T(string tr, string en) => KitEditorLanguage.T(tr, en);
         static CultureInfo Culture => KitEditorLanguage.Culture;
 
@@ -166,7 +165,7 @@ namespace Mimicraft.EditorTools
             using (new EditorGUILayout.HorizontalScope())
             {
                 GUILayout.Label(Icon(issue.Level), GUILayout.Width(20), GUILayout.Height(18));
-                GUILayout.Label(issue.Text(turkish), wrap);
+                GUILayout.Label(issue.Text(), wrap);
                 if (issue.Targets.Length > 0 && GUILayout.Button(T("Seç", "Select"), GUILayout.Width(56)))
                 {
                     Selection.objects = issue.Targets;

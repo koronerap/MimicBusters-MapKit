@@ -155,14 +155,14 @@ namespace Mimicraft.EditorTools
             }
         }
 
-        /// <summary>The README beside the project: the Turkish one in Turkish, the English one in every other
-        /// language (the guide is written in those two).</summary>
+        /// <summary>The README beside the project in the kit's language (README.de.md, README.ja.md...), the English
+        /// README.md when that language has none.</summary>
         static void OpenGuide()
         {
             string root = Directory.GetParent(Application.dataPath)?.FullName ?? "";
-            string turkish = Path.Combine(root, "README.tr.md");
             string english = Path.Combine(root, "README.md");
-            string guide = KitEditorLanguage.Turkish && File.Exists(turkish) ? turkish : english;
+            string own = Path.Combine(root, $"README.{KitEditorLanguage.Language}.md");
+            string guide = KitEditorLanguage.Language != "en" && File.Exists(own) ? own : english;
 
             if (File.Exists(guide))
                 EditorUtility.OpenWithDefaultApp(guide);

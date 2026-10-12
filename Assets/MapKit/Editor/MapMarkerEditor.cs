@@ -93,14 +93,14 @@ namespace Mimicraft.EditorTools
         void DrawModelArea()
         {
             EditorGUILayout.Space(4);
-            EditorGUILayout.LabelField(T("3. Modelci alanı (Gartic)", "3. Modeller's area (Gartic)"), EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(T("3. Modelci alanı (Taklidi Tahmin Et)", "3. Modeller's area (Guess the Mimic)"), EditorStyles.boldLabel);
 
             using (new EditorGUI.IndentLevelScope())
             {
                 EditorGUILayout.PropertyField(modelArea, new GUIContent(T("Alanı kullan", "Use the area"),
-                    T("Açıkken Gartic'te modelcinin modeli bu kutunun içinde kalmak zorunda ve modelci kutunun " +
+                    T("Açıkken Taklidi Tahmin Et'te modelcinin modeli bu kutunun içinde kalmak zorunda ve modelci kutunun " +
                       "tabanının ortasında doğar. Kapalıyken modelci işaretçide doğar, alan sınırı yok.",
-                      "When on, the Gartic modeller's model has to stay inside this box and the modeller stands at " +
+                      "When on, the Guess the Mimic modeller's model has to stay inside this box and the modeller stands at " +
                       "the middle of its floor. When off, the modeller stands on the marker with no area limit.")));
 
                 if (!modelArea.boolValue && !modelArea.hasMultipleDifferentValues)
